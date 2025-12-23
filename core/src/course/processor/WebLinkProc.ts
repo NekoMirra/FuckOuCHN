@@ -9,10 +9,27 @@ export default class WebLinkProc implements Processor {
 
   async exec(page: Page) {
     await waitForSPALoaded(page);
+
+    // 线上链接的页面形态不稳定：有时没有“观看回放”，有时元素存在但不可点击。
+    // 这里做 fail-fast，避免长时间卡在 locator action 上。
+    const replay = page.getByText('观看回放').first();
+
+    const hasReplay = await replay
+      .isVisible({ timeout: 1200 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!hasReplay) {
+      console.log('不支持: 未找到“观看回放”');
+      return;
+    }
+
     try {
-      await page.getByText('观看回放').click({ timeout: 3000 });
-    } catch {
-      console.log('不支持');
+      await replay.click({ timeout: 1500, force: true });
+      // 点完后给页面一点点时间加载/弹窗渲染，避免后续流程误判
+      await page.waitForTimeout(800);
+    } catch (e) {
+      console.log('不支持: “观看回放”不可点击', (e as Error).message);
     }
   }
 }

@@ -28,7 +28,7 @@
   },
   "scripts": {
     "build": "tsc -b core && tsc",
-    "start:electron": "yarn build && electron ./dist/src",
+    "start:electron": "chcp 65001 && yarn build && electron ./dist/src",
     "build:electron": "yarn build && electron-builder"
   },
   "workspaces": [
