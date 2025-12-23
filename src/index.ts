@@ -21,6 +21,13 @@ if (!gotTheLock) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+const workerWindows: BrowserWindow[] = [];
+
+function getConcurrency() {
+  const raw = Number(process.env._CONCURRENCY ?? 1);
+  const n = Number.isFinite(raw) ? Math.floor(raw) : 1;
+  return Math.min(Math.max(n, 1), 6);
+}
 
 app.on('second-instance', () => {
   if (mainWindow) {
@@ -45,6 +52,10 @@ app.on('second-instance', () => {
 }
 
 async function createWindow() {
+  const concurrency = getConcurrency();
+  const windowCount = Math.max(1, concurrency);
+
+  // 主窗口
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 900,
@@ -57,8 +68,26 @@ async function createWindow() {
   });
 
   await mainWindow.loadFile(path.join(__dirname, '/index.html'));
-
   mainWindow.webContents.setAudioMuted(true);
+
+  // 额外窗口（默认隐藏），用于并发 worker：CDP 下无法通过 Target.createTarget 新建页面。
+  // 这些窗口与主窗口同一 session，Playwright 连接后可直接拿到多个 pages。
+  for (let i = 1; i < windowCount; i++) {
+    const w = new BrowserWindow({
+      width: 1200,
+      height: 900,
+      // 避免并发时弹出一堆窗口；需要可视化调试可自行改为 true。
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, 'preload.js'),
+      },
+    });
+    workerWindows.push(w);
+    await w.loadFile(path.join(__dirname, '/index.html'));
+    w.webContents.setAudioMuted(true);
+  }
 
   // 使用 Playwright 连接窗口，示例连接到CDP端口（确保 Electron 打开时调试端口暴露）
   await connectToElectron().catch((err) => {

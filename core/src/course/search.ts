@@ -98,7 +98,9 @@ async function getUncompletedCourses(
   await waitForSPALoaded(page);
   const expandBtn = page.getByText(/全部(?:收起|展开)/);
 
-  if ((await expandBtn.textContent())!.indexOf('收起')) {
+  const expandText = ((await expandBtn.textContent().catch(() => '')) ?? '').trim();
+  // 仅当按钮显示“展开”时点击（“收起”表示当前已展开）
+  if (expandText.includes('展开')) {
     await expandBtn.click();
     await page.waitForLoadState('domcontentloaded');
   }
