@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>Automation</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: #0b1020;
+        color: rgba(255, 255, 255, 0.85);
+        display: grid;
+        place-items: center;
+        height: 100vh;
+      }
+      .hint {
+        max-width: 720px;
+        padding: 16px 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: rgba(255, 255, 255, 0.06);
+        line-height: 1.5;
+      }
+      .hint b {
+        color: rgba(255, 255, 255, 0.95);
+      }
+      .muted {
+        color: rgba(255, 255, 255, 0.65);
+        font-size: 12px;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hint">
+      <div style="font-size:18px; margin-bottom:6px;"><b>刷课窗口（Automation）</b></div>
+      <div>这个窗口会被 Playwright 导航到学习平台并自动操作。</div>
+      <div class="muted">需要手动登录时请在这里输入；真正的进度/日志在单独的<b>“进度面板”</b>窗口。</div>
+    </div>
+  </body>
+</html>

@@ -3,13 +3,258 @@
   <head>
     <meta charset="UTF-8">
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
-    <title>正在加载!</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+    <title>ImsTechAuto</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1020;
+        --panel: rgba(255, 255, 255, 0.06);
+        --panel2: rgba(255, 255, 255, 0.08);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.65);
+        --good: #35c38e;
+        --warn: #f6c343;
+        --bad: #ff5a67;
+        --accent: #7aa2ff;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: radial-gradient(1200px 800px at 30% 20%, rgba(122, 162, 255, 0.15), transparent),
+          radial-gradient(900px 600px at 70% 60%, rgba(53, 195, 142, 0.12), transparent), var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+      }
+
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        font-size: 18px;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+
+      .brand .sub {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 12px;
+        backdrop-filter: blur(8px);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 12px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .kpi {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+
+      .kpi .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .kpi .value {
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .bar {
+        height: 10px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+      }
+
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent), var(--good));
+        transition: width 180ms ease;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 8px 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        vertical-align: top;
+      }
+
+      th {
+        color: rgba(255, 255, 255, 0.72);
+        font-weight: 600;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--panel2);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        font-size: 12px;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--muted);
+      }
+
+      .dot.good {
+        background: var(--good);
+      }
+      .dot.warn {
+        background: var(--warn);
+      }
+      .dot.bad {
+        background: var(--bad);
+      }
+
+      .log {
+        height: 360px;
+        overflow: auto;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.45;
+        background: rgba(0, 0, 0, 0.20);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 10px;
+        white-space: pre-wrap;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      @media (max-width: 980px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
   </head>
   <body>
-    <h1>加载中!</h1>
-    Node.js 版本: <span id="node-version"></span>,
-    Chromium 版本: <span id="chrome-version"></span>,
-    Electron 版本: <span id="electron-version"></span>.
+    <div class="wrap">
+      <div class="top">
+        <div class="brand">
+          <h1>ImsTechAuto</h1>
+          <div class="sub">
+            Node <span id="node-version"></span> · Chromium <span id="chrome-version"></span> · Electron
+            <span id="electron-version"></span>
+          </div>
+        </div>
+        <div class="badge" title="并发度（_CONCURRENCY）">
+          <span class="dot" id="ui-dot"></span>
+          <span>并发</span>
+          <b id="ui-concurrency">1</b>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <div class="kpi">
+            <span class="label">当前课程组</span>
+            <span class="value" id="ui-group">-</span>
+          </div>
+          <div class="kpi">
+            <span class="label">进度</span>
+            <span class="value" id="ui-progress">0 / 0</span>
+          </div>
+        </div>
+        <div style="height:10px"></div>
+        <div class="bar"><i id="ui-bar"></i></div>
+        <div style="height:8px"></div>
+        <div class="row muted">
+          <div>完成 <span id="ui-done">0</span> · 跳过 <span id="ui-skip">0</span> · 失败 <span id="ui-err">0</span></div>
+          <div>最后更新：<span id="ui-last">-</span></div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <div class="row">
+            <div class="kpi"><span class="label">Worker 状态</span><span class="value">实时</span></div>
+            <div class="muted">显示每个页面正在处理的条目</div>
+          </div>
+          <div style="height:8px"></div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:70px">Worker</th>
+                <th style="width:90px">序号</th>
+                <th>当前任务</th>
+              </tr>
+            </thead>
+            <tbody id="ui-workers"></tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="row">
+            <div class="kpi"><span class="label">日志</span><span class="value">最近 200 条</span></div>
+            <div class="muted">按事件整理，不会像控制台那样炸屏</div>
+          </div>
+          <div style="height:8px"></div>
+          <div class="log" id="ui-log"></div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

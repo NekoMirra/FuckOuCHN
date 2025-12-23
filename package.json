@@ -15,6 +15,7 @@
       "dist/src/**/*.js",
       "node_modules/**/*",
       "index.html",
+      "automation.html",
       "preload.js",
       "package.json",
       "!**/.cookies.txt",

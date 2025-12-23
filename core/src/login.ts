@@ -29,8 +29,20 @@ async function login(browser: Browser, config: LoginConfig) {
     });
   }
 
-  const page =
-    context.pages().length == 0 ? await context.newPage() : context.pages()[0];
+  // Electron 多窗口 + CDP 场景：需要避开 UI 窗口。
+  // preload 会给 automation 窗口设置 window.name = 'IMS_AUTOMATION'。
+  let page = context.pages().length == 0 ? await context.newPage() : context.pages()[0];
+
+  for (const p of context.pages()) {
+    const name = await p
+      .evaluate(() => window.name)
+      .then(String)
+      .catch(() => '');
+    if (name === 'IMS_AUTOMATION') {
+      page = p;
+      break;
+    }
+  }
 
   await page.goto(config.homeApi, { timeout: 1000 * 60 * 10 });
 

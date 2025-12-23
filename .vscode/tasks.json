@@ -4,7 +4,7 @@
     {
       "label": "tsc",
       "type": "shell",
-      "command": "npx tsc",
+      "command": "node ../node_modules/typescript/bin/tsc -p tsconfig.json",
       "group": {
         "kind": "build",
         "isDefault": true

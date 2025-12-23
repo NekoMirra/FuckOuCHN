@@ -132,15 +132,15 @@ async function getUncompletedCourses(
               ? (await getActivityName(activityLoc)) == ''
                 ? []
                 : {
-                    moduleId: syllabus.moduleId,
-                    moduleName: syllabus.moduleName,
-                    syllabusId: syllabus.syllabusId,
-                    syllabusName: syllabus.syllabusName,
-                    type: await getActivityType(activityLoc),
-                    activityId: await getActivityId(activityLoc),
-                    activityName: await getActivityName(activityLoc),
-                    activityLoc,
-                  }
+                  moduleId: syllabus.moduleId,
+                  moduleName: syllabus.moduleName,
+                  syllabusId: syllabus.syllabusId,
+                  syllabusName: syllabus.syllabusName,
+                  type: await getActivityType(activityLoc),
+                  activityId: await getActivityId(activityLoc),
+                  activityName: await getActivityName(activityLoc),
+                  activityLoc,
+                }
               : [],
           ),
         )
