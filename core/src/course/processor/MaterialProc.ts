@@ -17,31 +17,31 @@ export default class Material implements Processor {
       const pdf = pdfs[i];
       try {
         // 确保弹窗已关闭
-        await page.locator('#file-previewer').waitFor({ state: 'hidden', timeout: 2000 }).catch(() => {});
-        
+        await page.locator('#file-previewer').waitFor({ state: 'hidden', timeout: 2000 }).catch(() => { });
+
         await pdf.click({ timeout: 5000 });
-        
+
         // 等待弹窗打开
         await page.locator('#file-previewer').waitFor({ state: 'visible', timeout: 10000 });
-        
+
         // 等待一小段时间让内容加载
         await page.waitForTimeout(1000);
-        
+
         // 关闭弹窗
         const closeBtn = page.locator('#file-previewer .header > a.close');
         await closeBtn.click({ timeout: 5000 });
-        
+
         // 等待弹窗完全关闭
         await page.locator('#file-previewer').waitFor({ state: 'hidden', timeout: 5000 });
-        
+
         console.log(`  ✅ 查看 PDF ${i + 1}/${pdfs.length}`);
       } catch (e) {
         console.warn(`  ⚠️ PDF ${i + 1} 处理失败，尝试关闭弹窗继续: ${String(e).slice(0, 100)}`);
         // 尝试强制关闭弹窗
-        await page.locator('#file-previewer .header > a.close').click({ timeout: 2000, force: true }).catch(() => {});
-        await page.locator('#file-previewer').waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+        await page.locator('#file-previewer .header > a.close').click({ timeout: 2000, force: true }).catch(() => { });
+        await page.locator('#file-previewer').waitFor({ state: 'hidden', timeout: 3000 }).catch(() => { });
         // 如果还是关不掉，按 ESC
-        await page.keyboard.press('Escape').catch(() => {});
+        await page.keyboard.press('Escape').catch(() => { });
         await page.waitForTimeout(500);
       }
     }
