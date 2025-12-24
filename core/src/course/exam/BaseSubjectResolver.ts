@@ -105,6 +105,11 @@ abstract class BaseSubjectResolver {
   clearPrefetchedResult(): void {
     this._prefetchedResult = undefined;
   }
+
+  /**
+   * 重置状态（当分数不达预期时调用，丢弃历史收集的错误答案）
+   */
+  abstract reset(): void;
 }
 
 export default BaseSubjectResolver;

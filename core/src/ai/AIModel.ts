@@ -500,7 +500,14 @@ class AIModel {
               }
             }
             const uniq = Array.from(new Set(indices)).sort((a, b) => a - b);
-            return { id: req.id, result: { indices: uniq.length ? uniq : [0] } };
+            // 如果解析失败，随机选择前两个选项作为兜底
+            if (uniq.length === 0) {
+              const fallback = [0];
+              if (req.options.length > 1) fallback.push(1);
+              console.warn(chalk.yellow(`  [AI批量] 多选题 ${req.id} 解析失败，使用兜底: raw=${raw}`));
+              return { id: req.id, result: { indices: fallback } };
+            }
+            return { id: req.id, result: { indices: uniq } };
           } else {
             // single_selection / true_or_false
             const strategies: Partial<

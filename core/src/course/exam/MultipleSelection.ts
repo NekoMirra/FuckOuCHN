@@ -98,6 +98,16 @@ class MultipleSelection extends BaseSubjectResolver {
   isPass(): boolean {
     return this.pass;
   }
+
+  /**
+   * 重置状态（当分数不达预期时调用，丢弃历史收集的错误答案）
+   */
+  reset(): void {
+    this.pass = false;
+    this.solvedAnswer = undefined;
+    this.tried.clear();
+    this.clearPrefetchedResult();
+  }
 }
 
 export default MultipleSelection;

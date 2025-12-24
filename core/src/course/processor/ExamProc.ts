@@ -183,6 +183,12 @@ export default class ExamProc implements Processor {
         console.log('分数未达预期, 重新执行');
         console.log('尝试次数:', retry + 1);
 
+        // 重置所有 resolver，丢弃错误的历史答案
+        console.log('丢弃历史收集的答案，重新开始...');
+        for (const id in subjectResolverList) {
+          subjectResolverList[id]?.reset();
+        }
+
         const waitTime = total * 1000;
         console.log(waitTime / 1000, '秒后重新开始答题');
         await page.waitForTimeout(waitTime);
