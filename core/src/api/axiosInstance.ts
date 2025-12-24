@@ -33,6 +33,8 @@ function newAxiosInstance(url: string = '') {
     config.headers['Accept-Language'] = 'zh-CN,zh;q=0.9,en;q=0.8';
 
     config.headers['Origin'] = API_BASE_URL;
+    // 某些接口会校验 Referer；给一个稳定的站内 Referer，避免 403。
+    config.headers['Referer'] = `${API_BASE_URL}/user/index#/`;
 
     config.headers['Pragma'] = 'no-cache';
     config.headers['Cache-Control'] = 'no-cache';

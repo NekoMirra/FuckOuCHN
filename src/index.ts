@@ -33,7 +33,7 @@ let bufferedInit: { concurrency: number; ts: number } | null = null;
 
 function sendToUi(channel: string, payload: any) {
   if (!uiWindow) return;
-  // UI 未 ready 时先缓冲，避免漏事件导致“进度窗口不更新”。
+  // UI 未 ready 时先缓冲，避免漏事件导致"进度窗口不更新"。
   if (!uiReady) {
     if (channel === 'ims:ui:init') bufferedInit = payload;
     if (channel === 'ims:progress') bufferedProgress.push(payload as RunnerProgressEvent);
@@ -135,8 +135,9 @@ async function createWindow() {
 
   // UI ready 握手：renderer 会发 ims:ui:ready。
   // 这里提前准备 init 数据，并在 ready 后补发。
+  // 注意：不要在此处重置 uiReady，因为 preload 的 ims:ui:ready 可能已经发送并处理
   bufferedInit = { concurrency, ts: Date.now() };
-  uiReady = false;
+  // uiReady = false;  // 已在变量声明时初始化，不要重置
   bufferedProgress.length = 0;
 
   if (process.env._DEBUG_UI) {
@@ -162,7 +163,6 @@ async function createWindow() {
 }
 
 ipcMain.on('ims:ui:ready', (evt) => {
-  console.log('[Main] Received ims:ui:ready from renderer');
   // 确保是当前 uiWindow 发来的
   if (!uiWindow) return;
   if (evt.sender.id !== uiWindow.webContents.id) return;

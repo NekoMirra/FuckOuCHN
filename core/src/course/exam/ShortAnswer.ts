@@ -49,9 +49,17 @@ class ShortAnswer extends BaseSubjectResolver {
 
         // 没有预获取或预获取结果已尝试过，使用 AI 实时请求
         for (let i = 0; i < 3; i++) {
-            const t = (await this.aiModel.getTextResponse(this.subject.description))
-                .replace(/\s+/g, ' ')
-                .trim();
+            let raw = '';
+            try {
+                raw = await this.aiModel.getTextResponse(this.subject.description);
+            } catch (e) {
+                console.warn(
+                    `简答题 AI 获取失败(第 ${i + 1}/3 次)，将使用兜底：subject=${this.subject.id} err=${String(e)}`,
+                );
+                break;
+            }
+
+            const t = raw.replace(/\s+/g, ' ').trim();
 
             if (!t) continue;
             if (this.triedTexts.has(t)) continue;
@@ -62,7 +70,7 @@ class ShortAnswer extends BaseSubjectResolver {
         }
 
         // 兜底：允许返回最后一次
-        return this.cached;
+        return this.cached ?? '无法获取答案';
     }
 
     isPass(): boolean {

@@ -12,6 +12,7 @@ test('测试考试答题', async ({ page }) => {
   expect(await aiModel, '连接失败').not.toBeNull();
   const exam = new ExamProc();
   await exam.condition({
+    courseId: 0, // 替换为实际的课程 ID
     moduleId: '??',
     moduleName: '??',
     syllabusId: null,

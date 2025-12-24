@@ -11,6 +11,8 @@ const qps = Number(_Qps) || 1;
 
 const { _ACCOUNT: account, _PASSWORD: password } = process.env;
 
+const examMaxRetries = Math.max(0, Number(process.env._EXAM_MAX_RETRIES ?? 2));
+
 // 功能开关
 const parseEnvBool = (val: string | undefined, defaultVal: boolean): boolean => {
   if (val === undefined || val === '') return defaultVal;
@@ -51,6 +53,7 @@ const Config = {
   },
   playRate: Number(process.env._PLAY_RATE ?? 8),
   totalPoints: Number(process.env._TOTAL_POINTS ?? 100),
+  examMaxRetries,
 };
 
 function printConfigStatus() {
@@ -60,6 +63,7 @@ function printConfigStatus() {
   console.log('================================\n');
   console.log('视频倍速:', Config.playRate);
   console.log('考试分数及格线(百分比):', Config.totalPoints);
+  console.log('考试最多重试次数:', Config.examMaxRetries);
 
   if (Config.browser.headless) {
     console.log('无头模式已启用');

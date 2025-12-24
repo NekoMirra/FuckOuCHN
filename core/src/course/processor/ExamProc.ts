@@ -26,7 +26,7 @@ export default class ExamProc implements Processor {
   #totalScore: number = -1;
 
   // config
-  private tryCount = 15;
+  private maxRetries = Config.examMaxRetries;
 
   async condition(info: CourseInfo) {
     this.#courseInfo = info;
@@ -38,8 +38,9 @@ export default class ExamProc implements Processor {
       return false;
     }
 
-    if (!(await this.isSupport(exam))) {
-      console.log('考试问题某些类型目前不支持: skip');
+    const support = await this.checkExamRunnable(exam);
+    if (!support.ok) {
+      console.log(`${support.reason}: skip`);
       return false;
     }
 
@@ -84,7 +85,7 @@ export default class ExamProc implements Processor {
       );
     }
 
-    for (let i = 0; q && i < this.tryCount; i++) {
+    for (let retry = 0; q && retry <= this.maxRetries; retry++) {
       const { questions, examPaperInstanceId, subjects, total } = q;
 
       const submissionId = await exam.submissionsStorage({
@@ -174,8 +175,13 @@ export default class ExamProc implements Processor {
       );
 
       if (q) {
-        console.log('不是满分, 重新执行');
-        console.log('尝试次数:', i + 1);
+        if (retry >= this.maxRetries) {
+          console.log('已达到最大重试次数, 跳过本次考试');
+          break;
+        }
+
+        console.log('分数未达预期, 重新执行');
+        console.log('尝试次数:', retry + 1);
 
         const waitTime = total * 1000;
         console.log(waitTime / 1000, '秒后重新开始答题');
@@ -411,7 +417,9 @@ export default class ExamProc implements Processor {
     }
   }
 
-  private async isSupport(exam: Exam): Promise<boolean> {
+  private async checkExamRunnable(
+    exam: Exam,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
     const examInfo = await exam.get();
 
     // API 返回的字段名可能是 submit_times 或 submit_limit
@@ -423,6 +431,18 @@ export default class ExamProc implements Processor {
 
     this.#totalScore = totalPoints;
 
+    // 检查是否还能提交
+    // submit_limit 为 null 表示无限次提交
+    // submit_limit 为 0 表示不允许提交（练习题/案例练习等）
+    if (submitLimit === 0) {
+      // 练习题：不值得继续做题型检查/拉题目（也不会提交）
+      console.log(
+        `此考试不允许提交 (submit_limit=0) | ${examInfo.title ?? ''} | 总分:${totalPoints}`,
+      );
+      return { ok: false, reason: '此考试不允许提交' };
+    }
+
+    // 常规考试再输出详细信息（避免练习题刷屏）
     console.log('完成标准:', examInfo.completion_criterion);
     console.log('标题:', examInfo.title);
     console.log('成绩比例:', examInfo.score_percentage);
@@ -432,18 +452,10 @@ export default class ExamProc implements Processor {
     console.log('公布成绩:', announceScoreStatus);
     console.log('总分:', totalPoints);
 
-    // 检查是否还能提交
-    // submit_limit 为 null 表示无限次提交
-    // submit_limit 为 0 表示不允许提交（练习题等）
-    if (submitLimit === 0) {
-      console.log('此考试不允许提交 (submit_limit=0)');
-      return false;
-    }
-
     // 如果有提交次数限制，检查是否超过
     if (submitLimit !== null && submittedCount >= submitLimit) {
       console.log(`已达到提交次数上限 (${submittedCount}/${submitLimit})`);
-      return false;
+      return { ok: false, reason: '已达到提交次数上限' };
     }
 
     console.log('检查考试题目类型...');
@@ -456,13 +468,13 @@ export default class ExamProc implements Processor {
     console.log('题目类型:', typeNames);
 
     const isSupportSubject = ({ type }: (typeof subjects)[number]) =>
-      hasResolver(type);
+      hasResolver(type) || type === 'random'; // random类型本身可能没有解析器，但需要检查其子题目
 
     const test = subjects
       .filter((v) => v.type != 'text')
       .every((v) =>
         v.type == 'random'
-          ? v.sub_subjects.every(isSupportSubject)
+          ? v.sub_subjects?.every(isSupportSubject) || true // 如果random没有子题目，则认为支持
           : isSupportSubject(v),
       );
 
@@ -474,7 +486,7 @@ export default class ExamProc implements Processor {
       console.log('不支持的题目类型:', unsupported);
     }
 
-    return test;
+    return test ? { ok: true } : { ok: false, reason: '题型暂不支持' };
   }
 
   /**

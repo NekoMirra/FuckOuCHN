@@ -212,3 +212,4 @@ window.addEventListener('DOMContentLoaded', () => {
       ipcRenderer.send('ims:log', `Preload Error: ${err.message}\n${err.stack}`);
     } catch { }
   }
+});

@@ -124,8 +124,16 @@ export default class OnlineVideoProc implements Processor {
 
   private monitorPlayback(page: Page) {
     let lastCur = '';
+    let checkCount = 0;
     const interval = setInterval(async () => {
       try {
+        checkCount++;
+        // 前 5 次检查（10秒内）不触发重启，避免初始加载时误判
+        if (checkCount <= 5) {
+          lastCur = '';
+          return;
+        }
+        
         const cur = await page.evaluate(() => {
           const el =
             document.querySelector('video') || document.querySelector('audio');
@@ -133,7 +141,7 @@ export default class OnlineVideoProc implements Processor {
         });
 
         const curStr = String(cur);
-        if (curStr === lastCur) {
+        if (curStr === lastCur && lastCur !== '' && lastCur !== '0') {
           console.log('⚠️ 检测到播放可能卡住，尝试重启播放');
           await this.restartPlayback(page);
         }
@@ -188,8 +196,21 @@ export default class OnlineVideoProc implements Processor {
   }
 
   private async waitForPlaybackEnd(page: Page, mediaType: 'video' | 'audio') {
+    // 先等待视频开始播放（currentTime > 0）
     await page.waitForFunction(
-      ({ start, mediaType }) => {
+      ({ mediaType }) => {
+        const el = document.querySelector(mediaType) as HTMLMediaElement;
+        return el && el.currentTime > 0 && !el.paused;
+      },
+      { mediaType },
+      { timeout: 30000, polling: 500 },
+    ).catch(() => {
+      console.warn('⚠️ 等待视频开始播放超时');
+    });
+
+    // 再等待播放结束
+    await page.waitForFunction(
+      ({ mediaType }) => {
         let cur = '';
         let end = '';
         if (mediaType === 'video') {
@@ -205,9 +226,12 @@ export default class OnlineVideoProc implements Processor {
             (document.querySelector('.duration') as HTMLElement)?.textContent ??
             '';
         }
-        return cur.trim() === end.trim() && cur.trim() !== '';
+        // 确保时间不为空、不为 00:00，且当前时间等于总时长
+        const curTrim = cur.trim();
+        const endTrim = end.trim();
+        return curTrim === endTrim && curTrim !== '' && curTrim !== '00:00' && curTrim !== '00:00:00';
       },
-      { start: Date.now(), mediaType },
+      { mediaType },
       { timeout: 0, polling: 1000 },
     );
   }

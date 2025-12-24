@@ -76,6 +76,7 @@ async function main() {
   // 3. 测试考试
   // 使用已知的考试 ID（专题一：17 题）
   const testExamInfo: CourseInfo = {
+    courseId: 30001870501, // 替换为实际的课程 ID
     moduleId: 'test-module',
     moduleName: '专题一 毛泽东思想及其历史地位',
     syllabusId: null,

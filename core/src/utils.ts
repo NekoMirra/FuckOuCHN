@@ -2,6 +2,57 @@ import { Page } from 'playwright';
 import ReadLine from 'readline';
 import Config from './config.js';
 
+function envBool(name: string, defaultVal = false) {
+  const v = String(process.env[name] ?? '').trim().toLowerCase();
+  if (!v) return defaultVal;
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+function attachDebugNetwork(page: Page) {
+  if (!envBool('_DEBUG_NET', false)) return;
+
+  const seen = new Set<string>();
+  const shouldLogUrl = (url: string) => url.includes('/api/');
+
+  page.on('request', (req) => {
+    const url = req.url();
+    if (!shouldLogUrl(url)) return;
+    const key = `REQ:${req.method()}:${url}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    console.log(`[net] → ${req.method()} ${url}`);
+  });
+
+  page.on('response', async (res) => {
+    const url = res.url();
+    if (!shouldLogUrl(url)) return;
+    const key = `RES:${res.status()}:${url}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const ct = (res.headers()['content-type'] ?? '').toLowerCase();
+    let extra = '';
+
+    if (ct.includes('application/json')) {
+      try {
+        const json = await res.json();
+        const keys = json && typeof json === 'object' ? Object.keys(json).slice(0, 20) : [];
+        extra = keys.length ? ` keys=[${keys.join(',')}]` : '';
+      } catch {
+        // ignore json parse failures
+      }
+    }
+
+    console.log(`[net] ← ${res.status()} ${url}${extra}`);
+  });
+
+  page.on('requestfailed', (req) => {
+    const url = req.url();
+    if (!shouldLogUrl(url)) return;
+    console.warn(`[net] ✖ ${req.method()} ${url} ${req.failure()?.errorText ?? ''}`);
+  });
+}
+
 /**
  * 因为 vue 动态加载, 上方使用了 ngProgess 库显示进度
  * 我们可以根据 ngProgress 判断页面是否加载完成
@@ -103,3 +154,5 @@ function errorWithRetry(taskName: string, maxCnt: number) {
 }
 
 export { input, waitForSPALoaded, parseDOMText, errorWithRetry };
+
+export { attachDebugNetwork };

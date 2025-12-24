@@ -69,9 +69,15 @@ class SingleSelection extends BaseSubjectResolver {
       this.type,
       description,
       opts.map(({ content }) => content),
-    );
+    ).catch((e) => {
+      console.warn(
+        `单选/判断题 AI 获取失败，使用兜底选项(第一个)：subject=${this.subject.id} type=${this.type} err=${String(e)}`,
+      );
+      return 0;
+    });
 
-    return [opts[answer].id];
+    const idx = Number.isInteger(answer) && answer >= 0 && answer < opts.length ? answer : 0;
+    return [opts[idx].id];
   }
 
   isPass(): boolean {

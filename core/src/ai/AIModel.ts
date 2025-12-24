@@ -10,6 +10,8 @@ import Config from '../config.js';
 import { sleep } from 'openai/core.js';
 import { format } from 'util';
 
+type ChatCompletionCreateParams = Parameters<OpenAI['chat']['completions']['create']>[0];
+
 function indexToLabel(index: number): string {
   // 0 -> A, 1 -> B, ... 25 -> Z, 26 -> AA ...
   if (!Number.isInteger(index) || index < 0) {
@@ -95,9 +97,19 @@ class AIModel {
   private constructor(api: string, key: string, model: string, Qps: number) {
     const proxy = Config.proxy;
     this.#model = model;
+
+    const timeoutMsRaw = Number(process.env._AI_TIMEOUT_MS ?? 60000);
+    // 最小 5s，避免误配为 0 或过小导致频繁误判超时
+    this.#timeoutMs =
+      Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0
+        ? Math.max(5000, timeoutMsRaw)
+        : 60000;
+
     this.#openai = new OpenAI({
       baseURL: api,
       apiKey: key,
+      // OpenAI SDK 支持 timeout；同时我们在调用层也会加 AbortController 兜底
+      timeout: this.#timeoutMs,
       httpAgent:
         Config.proxy &&
         new https.Agent({
@@ -107,6 +119,41 @@ class AIModel {
         }),
     })!;
     this.#Qps = Qps;
+  }
+
+  private async chatCreate(
+    params: ChatCompletionCreateParams,
+    meta?: { purpose?: string; timeoutMs?: number },
+  ): Promise<OpenAI.Chat.ChatCompletion> {
+    const timeoutMs = meta?.timeoutMs ?? this.#timeoutMs;
+    const purpose = meta?.purpose ? ` (${meta.purpose})` : '';
+
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      // OpenAI SDK 的第二参数支持 request options（含 signal）。
+      // 为避免版本差异导致的类型问题，这里使用 any。
+      return await (this.#openai!.chat.completions.create as any)(params, {
+        signal: controller.signal,
+      });
+    } catch (e: any) {
+      // 统一将 AbortError 提示为“超时”，让上层兜底更直观。
+      const name = String(e?.name ?? '');
+      const code = String(e?.code ?? '');
+      const msg = String(e?.message ?? e ?? '');
+      const aborted =
+        name === 'AbortError' ||
+        code === 'ERR_CANCELED' ||
+        /aborted|abort|canceled|cancelled/i.test(msg);
+
+      if (aborted) {
+        throw new Error(`AI 请求超时：${timeoutMs}ms${purpose}`);
+      }
+      throw e;
+    } finally {
+      clearTimeout(t);
+    }
   }
 
   /**
@@ -274,15 +321,17 @@ class AIModel {
       options,
     );
 
-    const content: OpenAI.Chat.ChatCompletion =
-      await this.#openai!.chat.completions.create({
+    const content: OpenAI.Chat.ChatCompletion = await this.chatCreate(
+      {
         messages: [
           { role: 'system', content: systemConstraint },
           { role: 'user', content: questionContent },
           { role: 'user', content: '请只返回正确答案的字母' },
         ],
         model: this.#model,
-      });
+      },
+      { purpose: 'true_or_false' },
+    );
 
     return content;
   }
@@ -294,15 +343,17 @@ class AIModel {
       options,
     );
 
-    const content: OpenAI.Chat.ChatCompletion =
-      await this.#openai!.chat.completions.create({
+    const content: OpenAI.Chat.ChatCompletion = await this.chatCreate(
+      {
         messages: [
           { role: 'system', content: systemConstraint },
           { role: 'user', content: questionContent },
           { role: 'user', content: '请只返回正确答案的字母' },
         ],
         model: this.#model,
-      });
+      },
+      { purpose: 'single_selection' },
+    );
 
     return content;
   }
@@ -349,8 +400,8 @@ class AIModel {
       options,
     );
 
-    const content: OpenAI.Chat.ChatCompletion =
-      await this.#openai!.chat.completions.create({
+    const content: OpenAI.Chat.ChatCompletion = await this.chatCreate(
+      {
         messages: [
           { role: 'system', content: systemConstraint },
           { role: 'user', content: questionContent },
@@ -361,7 +412,9 @@ class AIModel {
           },
         ],
         model: this.#model,
-      });
+      },
+      { purpose: 'multiple_selection' },
+    );
 
     return content;
   }
@@ -369,14 +422,16 @@ class AIModel {
   async shortAnswer(description: string) {
     const systemConstraint =
       '你将回答简答题。请用中文给出简洁、直接的答案（1-3 句话），不要输出多余解释或格式。';
-    const content: OpenAI.Chat.ChatCompletion =
-      await this.#openai!.chat.completions.create({
+    const content: OpenAI.Chat.ChatCompletion = await this.chatCreate(
+      {
         messages: [
           { role: 'system', content: systemConstraint },
           { role: 'user', content: `题目：${description}` },
         ],
         model: this.#model,
-      });
+      },
+      { purpose: 'short_answer' },
+    );
     return content;
   }
 
@@ -512,6 +567,7 @@ class AIModel {
   #model: string;
   #openai: OpenAI;
   #Qps: number;
+  #timeoutMs: number;
   #taskQueue: Array<Promise<any>> = [];
 
   static instance?: AIModel;

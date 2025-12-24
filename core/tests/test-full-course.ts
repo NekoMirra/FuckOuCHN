@@ -19,6 +19,7 @@ import course from '../src/api/course.js';
 const testActivities: CourseInfo[] = [
     // 专题一测验 (17题，已验证满分)
     {
+        courseId: 30001870501, // 替换为实际的课程 ID
         moduleId: 'test-module',
         moduleName: '专题一',
         syllabusId: null,
