@@ -3,6 +3,12 @@ import Config, { API_BASE_URL } from '../config.js';
 import { restoreCookies } from '../login.js';
 import { exit } from 'process';
 
+function normalizeCookieHeaderValue(v: string) {
+  return String(v ?? '')
+    .trim()
+    .replace(/;\s*$/, '');
+}
+
 function newAxiosInstance(url: string = '') {
   if (url) url = '/' + url;
 
@@ -40,18 +46,21 @@ function newAxiosInstance(url: string = '') {
     config.headers['dnt'] = '1';
     config.headers['sec-gpc'] = '1';
 
-    const defaultCookie = (axiosInstance.defaults.headers['Cookie'] ??
-      '') as string;
+    const defaultCookie = normalizeCookieHeaderValue(
+      (axiosInstance.defaults.headers['Cookie'] ?? '') as string,
+    );
 
-    config.headers['Cookie'] =
-      defaultCookie +
-      (await restoreCookies())
-        .flatMap((cookie) =>
-          defaultCookie.indexOf(cookie.name) == -1
-            ? `${cookie.name}=${cookie.value}`
-            : [],
-        )
-        .join('; ');
+    const restored = await restoreCookies();
+    const extraPairs = restored.flatMap((cookie) => {
+      // 简单去重：如果 defaultCookie 已包含该键，则不再追加
+      if (defaultCookie.includes(`${cookie.name}=`)) return [];
+      return `${cookie.name}=${cookie.value}`;
+    });
+
+    // ⚠️ 之前这里是字符串直接相加：defaultCookie + join('; ')
+    // 若 defaultCookie 非空且末尾没有 ';'，会变成 "a=bk=c"，服务器可能直接 400。
+    const parts = [defaultCookie, ...extraPairs].filter(Boolean);
+    config.headers['Cookie'] = parts.join('; ');
 
     return config;
   });

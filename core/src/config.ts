@@ -11,6 +11,15 @@ const qps = Number(_Qps) || 1;
 
 const { _ACCOUNT: account, _PASSWORD: password } = process.env;
 
+// 功能开关
+const parseEnvBool = (val: string | undefined, defaultVal: boolean): boolean => {
+  if (val === undefined || val === '') return defaultVal;
+  const v = val.trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+};
+
+const { _ENABLE_VIDEO, _ENABLE_EXAM } = process.env;
+
 const Config = {
   user: {
     account,
@@ -25,6 +34,11 @@ const Config = {
   },
   proxy: host && port ? { host: host!, port: Number(port) } : void 0,
   ai: { api, key, model, qps },
+  // 功能开关
+  features: {
+    enableVideo: parseEnvBool(_ENABLE_VIDEO, true), // 默认开启视频刷课
+    enableExam: parseEnvBool(_ENABLE_EXAM, true),   // 默认开启答题
+  },
 
   browser: {
     headless: !!process.env._HEAD_LESS,
@@ -40,6 +54,10 @@ const Config = {
 };
 
 function printConfigStatus() {
+  console.log('\n========== 功能开关 ==========');
+  console.log('视频刷课:', Config.features.enableVideo ? '✅ 开启' : '❌ 关闭');
+  console.log('自动答题:', Config.features.enableExam ? '✅ 开启' : '❌ 关闭');
+  console.log('================================\n');
   console.log('视频倍速:', Config.playRate);
   console.log('考试分数及格线(百分比):', Config.totalPoints);
 

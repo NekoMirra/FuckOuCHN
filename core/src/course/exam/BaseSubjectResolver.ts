@@ -18,9 +18,28 @@ export type Subject = {
   type: SubjectType;
 };
 
+/**
+ * 批量请求的数据结构
+ */
+export type BatchRequestItem = {
+  id: SubjectId;
+  type: SubjectType;
+  description: string;
+  options: string[];
+};
+
+/**
+ * 批量结果的数据结构
+ */
+export type BatchResultItem = {
+  indices?: number[];
+  text?: string;
+};
+
 abstract class BaseSubjectResolver {
   private _subject: Subject;
   private _aiModel: AIModel;
+  protected _prefetchedResult?: BatchResultItem;
 
   get subject() {
     return this._subject;
@@ -47,7 +66,45 @@ abstract class BaseSubjectResolver {
   ): Promise<void>;
 
   abstract getAnswer(): Promise<OptionId[]>;
+
+  /**
+   * 可选：当题型需要文本答案（如 short_answer）时返回文本。
+   * 默认不提供。
+   */
+  async getAnswerText(): Promise<string | undefined> {
+    return void 0;
+  }
+
   abstract isPass(): boolean;
+
+  /**
+   * 获取批量请求所需的数据（如果需要请求 AI）
+   * 返回 null 表示该题目不需要 AI 请求（已有答案或已通过）
+   */
+  getBatchRequestData(): BatchRequestItem | null {
+    if (this.isPass()) return null;
+
+    return {
+      id: this._subject.id,
+      type: this._subject.type,
+      description: this._subject.description,
+      options: this._subject.options.map((o) => o.content),
+    };
+  }
+
+  /**
+   * 设置预获取的 AI 答案结果
+   */
+  setPrefetchedResult(result: BatchResultItem): void {
+    this._prefetchedResult = result;
+  }
+
+  /**
+   * 清除预获取的结果
+   */
+  clearPrefetchedResult(): void {
+    this._prefetchedResult = undefined;
+  }
 }
 
 export default BaseSubjectResolver;

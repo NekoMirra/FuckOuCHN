@@ -1,193 +1,98 @@
 import { OptionId } from '../../api/Exam.js';
-import BaseSubjectResolver, { Option } from './BaseSubjectResolver.js';
+import BaseSubjectResolver, { BatchRequestItem } from './BaseSubjectResolver.js';
 
-// 最大尝试次数: 2^n − 1
 class MultipleSelection extends BaseSubjectResolver {
-  private dependableTable?: Record<OptionId, number>;
   private pass = false;
+  private solvedAnswer?: OptionId[];
+  private tried = new Set<string>();
 
-  private _combinations = this.generateCombinationsBySize(
-    this.subject.options.map((opt) => opt.id),
-  );
-
-  get combinations() {
-    return this._combinations;
+  private normalize(ids: OptionId[]) {
+    return ids.slice().sort((a, b) => a - b).join(',');
   }
 
-  set combinations(c: typeof this._combinations) {
-    const clearEmptyArray = function <T>(arr: T[], first = true): T[] {
-      const result: T[] = [];
+  override getBatchRequestData(): BatchRequestItem | null {
+    if (this.pass) return null;
 
-      for (const item of arr) {
-        if (Array.isArray(item)) {
-          const cleanedSubArray = clearEmptyArray(item, false);
-          if (cleanedSubArray.length > 0 || first) {
-            result.push(cleanedSubArray as T);
-          }
-          continue;
-        }
-        result.push(item);
-      }
-
-      return result;
+    return {
+      id: this.subject.id,
+      type: 'multiple_selection',
+      description: this.subject.description,
+      options: this.subject.options.map((o) => o.content),
     };
-
-    this._combinations = clearEmptyArray(c);
-  }
-
-  private async initDependableTable() {
-    if (!this.dependableTable) {
-      console.log('loading dependable tables... wait a minute');
-      this.dependableTable = this.subject.options.reduce(
-        (acc, { id }) => {
-          acc[id] = 1;
-          return acc;
-        },
-        {} as Record<OptionId, number>,
-      );
-
-      const combines = this.generateOptionIdCombines();
-      for (const combine of combines) {
-        const i = await this.aiModel.getResponse(
-          'true_or_false',
-          this.subject.description,
-          combine.map((c) => c.content),
-        );
-
-        this.dependableTable[combine[i].id] += 1;
-      }
-    }
-
-    return this.dependableTable!;
   }
 
   async addAnswerFilter(score: number, ...optionIds: OptionId[]) {
-    const count = optionIds.length;
-
-    if (count == 0 || this.combinations[count].length == 0) return;
-
-    const { options } = this.subject;
-
-    // 创建一个 `Set`，用于快速判断 `optionIds` 中是否包含某个选项
-    const optionIdSet = new Set(optionIds);
-
-    // 正确能拿满分, 不正确一分都拿不到
+    // score!=0：在该平台中（至少选择题/多选题）通常意味着“全对”，可以通过“未选集合”反推正确答案
     if (score != 0) {
-      this.combinations = Array.from(new Array(options.length + 1), () => []);
-
-      const r = options
-        .filter((opt) => !optionIdSet.has(opt.id))
+      const wrongSet = new Set(optionIds);
+      const solved = this.subject.options
+        .filter((opt) => !wrongSet.has(opt.id))
         .map((opt) => opt.id);
-
-      this.combinations[r.length] = [r];
+      this.solvedAnswer = solved;
       this.pass = true;
+      this.tried.add(this.normalize(solved));
       return;
     }
 
-    if (count == this.subject.options.length) {
-      this.combinations[count] = [];
-      return;
+    if (optionIds.length) {
+      this.tried.add(this.normalize(optionIds));
     }
-
-    // 过滤掉不符合 `optionIds` 的组合
-    this.combinations[count] = this.combinations[count].filter(
-      (c) =>
-        c.length == optionIdSet.size && !c.every((id) => optionIdSet.has(id)),
-    );
   }
 
   async getAnswer(): Promise<OptionId[]> {
-    const dependableTable = await this.initDependableTable();
+    if (this.pass && this.solvedAnswer) return this.solvedAnswer;
 
-    const sortDT = this.sortDependableTable();
+    const { options, description } = this.subject;
 
-    const NNN = sortDT.filter((v) => dependableTable[v] == 999);
+    // 优先使用预获取的结果
+    if (this._prefetchedResult?.indices?.length) {
+      const indices = this._prefetchedResult.indices;
+      this.clearPrefetchedResult();
+      let ids = indices
+        .filter((i) => i >= 0 && i < options.length)
+        .map((i) => options[i].id);
 
-    if (NNN.length != 0) return NNN;
-
-    // 随便选
-    const priority = [4, 3, 1, 2];
-    for (const p of priority) {
-      if (this.combinations.length >= p && this.combinations[p].length != 0) {
-        // 使用 reduce 找到最大总和值的组合索引
-        const maxCombination = this.combinations[p].reduce((max, current) => {
-          const currentSum = this.sumDependable(current, dependableTable);
-          const maxSum = this.sumDependable(max, dependableTable);
-          return currentSum > maxSum ? current : max;
-        });
-
-        return maxCombination;
+      // 避免重复提交相同集合
+      const key = this.normalize(ids);
+      if (!this.tried.has(key)) {
+        this.tried.add(key);
+        return ids;
       }
     }
 
-    console.warn('this options is empty!!!');
-    return [];
-  }
-
-  private async sumDependable(
-    ids: OptionId[],
-    dependableTable: Record<OptionId, number>,
-  ) {
-    return ids.reduce((acc, id) => acc + dependableTable[id], 0);
-  }
-
-  private sortDependableTable() {
-    if (!this.dependableTable || Object.keys(this.dependableTable).length == 0)
-      throw new Error('Error dependableTable is null or empty');
-
-    return Object.keys(this.dependableTable)
-      .sort(
-        (a, b) =>
-          this.dependableTable![Number(b)]! - this.dependableTable![Number(a)]!,
-      )
-      .map(Number);
-  }
-
-  private generateOptionIdCombines(): Option[][] {
-    const t: Option[][] = [];
-    const { options } = this.subject;
-    const len = options.length;
-
-    for (let i = 0; i < len; i++) {
-      for (let j = i + 1; j < len; j++) {
-        t.push(options.slice(i, j + 1));
-      }
+    // 没有预获取或预获取结果已尝试过，使用 AI 实时请求
+    let ids: OptionId[] = [];
+    try {
+      const indices = await this.aiModel.getMultiResponse(
+        'multiple_selection',
+        description,
+        options.map((o) => o.content),
+      );
+      ids = indices
+        .map((i) => options[i])
+        .filter(Boolean)
+        .map((o) => o.id);
+    } catch (e) {
+      // 兜底：AI 失败时，随机挑 2 个（如果只有 1 个选项就挑 1 个）
+      console.warn('多选题 AI 解析失败，使用兜底策略:', String(e));
+      const k = Math.min(2, options.length);
+      ids = options.slice(0, k).map((o) => o.id);
     }
 
-    return t;
-  }
-
-  /**
-   * 索引i对应有i个选项
-   * @param options
-   * @returns
-   */
-  private generateCombinationsBySize(options: OptionId[]) {
-    if (options.length > 4) {
-      throw new Error('too many options > 4');
-    }
-    const result = Array.from(
-      { length: options.length + 1 },
-      () => [] as OptionId[][],
-    );
-
-    function helper(currentCombination: OptionId[], start: number) {
-      // 根据组合的长度，将当前组合加入到对应的 result 索引位置
-      if (currentCombination.length != 0) {
-        result[currentCombination.length].push([...currentCombination]);
-      }
-
-      // 遍历选项，生成更多的组合
-      for (let i = start; i < options.length; i++) {
-        currentCombination.push(options[i]);
-        helper(currentCombination, i + 1);
-        currentCombination.pop(); // 回溯
-      }
+    // 避免重复提交相同集合
+    const key = this.normalize(ids);
+    if (this.tried.has(key)) {
+      // 简单扰动：翻转最后一个选项
+      const all = options.map((o) => o.id);
+      const set = new Set(ids);
+      const last = all[all.length - 1];
+      if (set.has(last)) set.delete(last);
+      else set.add(last);
+      ids = Array.from(set);
     }
 
-    // 开始递归生成组合
-    helper([], 0);
-    return result;
+    this.tried.add(this.normalize(ids));
+    return ids;
   }
 
   isPass(): boolean {

@@ -6,11 +6,11 @@ import { sleep } from 'openai/core.js';
 
 import { Processor } from '../processor.js';
 
-import AIModel, { Num, num2Letter } from '../../ai/AIModel.js';
+import AIModel, { indexToLabel } from '../../ai/AIModel.js';
 import course from '../../api/course.js';
 import Exam, { OptionId, SubjectId } from '../../api/Exam.js';
 import { parseDOMText } from '../../utils.js';
-import BaseSubjectResolver from '../exam/BaseSubjectResolver.js';
+import BaseSubjectResolver, { BatchRequestItem } from '../exam/BaseSubjectResolver.js';
 import { createResolver, hasResolver, s2s } from '../exam/resolver.js';
 import { CourseInfo, CourseType } from '../search.js';
 import Config from '../../config.js';
@@ -97,6 +97,9 @@ export default class ExamProc implements Processor {
         exit();
       }
 
+      // 批量获取 AI 答案
+      await this.batchPrefetchAnswers(questions, subjectResolverList, AIModel.instance!);
+
       const answerSubjects = await Promise.all(
         questions.map(async (subject) => {
           const resolver = subjectResolverList[subject.id];
@@ -109,6 +112,7 @@ export default class ExamProc implements Processor {
           }
 
           const answerOptionIds = await resolver.getAnswer();
+          const answerText = await resolver.getAnswerText();
 
           if (!resolver.isPass()) {
             // 打印题目
@@ -122,16 +126,20 @@ export default class ExamProc implements Processor {
             const entries = subject.options.entries();
 
             for (const [i, v] of entries) {
-              console.log(`\t${num2Letter(i as Num)}. ${v.content}`);
+              console.log(`\t${indexToLabel(i)}. ${v.content}`);
             }
 
             console.log(
               'AI 回答:',
               subject.options.flatMap(({ id }, i) =>
-                answerOptionIds.includes(id) ? num2Letter(i as Num) : [],
+                answerOptionIds.includes(id) ? indexToLabel(i) : [],
               ),
               answerOptionIds,
             );
+
+            if (answerText) {
+              console.log('AI 简答:', answerText);
+            }
 
             console.log();
           }
@@ -139,6 +147,7 @@ export default class ExamProc implements Processor {
           return {
             subjectId: subject.id,
             answerOptionIds,
+            answerText,
             updatedAt: subject.last_updated_at,
           };
         }),
@@ -187,6 +196,7 @@ export default class ExamProc implements Processor {
     subjects: Array<{
       subjectId: SubjectId;
       answerOptionIds: OptionId[];
+      answerText?: string;
       updatedAt: string;
     }>,
     totalSubjects: number,
@@ -212,6 +222,27 @@ export default class ExamProc implements Processor {
           await sleep(10000);
           counter--;
           continue;
+        }
+
+        if (
+          e instanceof AxiosError &&
+          e.response &&
+          e.response.status === HttpStatusCode.BadRequest
+        ) {
+          // 400 多数是参数/状态不对（例如 cookie/header 校验失败、试卷实例失效等），继续等一般无意义。
+          // 打印有限诊断信息，帮助定位（注意：不输出 Cookie 等敏感信息）。
+          const msg =
+            (e.response.data && (e.response.data.message || e.response.data.error)) ||
+            e.message;
+          console.warn('提交答案返回 400:', msg);
+          try {
+            console.warn('400 响应数据(截断):',
+              JSON.stringify(e.response.data).slice(0, 800),
+            );
+          } catch {
+            // ignore
+          }
+          throw e;
         }
         throw e; // Re-throw if it's not a 429 error
       }
@@ -383,38 +414,46 @@ export default class ExamProc implements Processor {
   private async isSupport(exam: Exam): Promise<boolean> {
     const examInfo = await exam.get();
 
-    const {
-      submit_times,
-      submitted_times,
-      total_points,
-      announce_score_status,
-    } = examInfo;
+    // API 返回的字段名可能是 submit_times 或 submit_limit
+    // submitted_times 或 submitted_count
+    const submitLimit = examInfo.submit_limit ?? examInfo.submit_times ?? null;
+    const submittedCount = examInfo.submitted_count ?? examInfo.submitted_times ?? 0;
+    const totalPoints = examInfo.total_points ?? 100;
+    const announceScoreStatus = examInfo.announce_score_status;
 
-    this.#totalScore = total_points;
+    this.#totalScore = totalPoints;
 
-    console.log('完成标准:', examInfo['completion_criterion']);
-    console.log('标题:', examInfo['title']);
-    console.log('成绩比例:', examInfo['score_percentage']);
-    console.log('题目数:', examInfo['subjects_count']);
-    console.log('允许提交次数:', submit_times);
-    console.log('已经提交次数:', submitted_times);
-    console.log('公布成绩:', announce_score_status);
-    console.log('总分:', total_points);
+    console.log('完成标准:', examInfo.completion_criterion);
+    console.log('标题:', examInfo.title);
+    console.log('成绩比例:', examInfo.score_percentage);
+    console.log('题目数:', examInfo.subjects_count);
+    console.log('允许提交次数:', submitLimit, '(null=无限)');
+    console.log('已经提交次数:', submittedCount);
+    console.log('公布成绩:', announceScoreStatus);
+    console.log('总分:', totalPoints);
 
-    // immediate_announce no_announce
-    if (announce_score_status != 'immediate_announce') return false;
+    // 检查是否还能提交
+    // submit_limit 为 null 表示无限次提交
+    // submit_limit 为 0 表示不允许提交（练习题等）
+    if (submitLimit === 0) {
+      console.log('此考试不允许提交 (submit_limit=0)');
+      return false;
+    }
 
-    if (submit_times != 999 || submit_times <= submitted_times) return false; // 可提交次数必须足够大, 因为AI答不准
+    // 如果有提交次数限制，检查是否超过
+    if (submitLimit !== null && submittedCount >= submitLimit) {
+      console.log(`已达到提交次数上限 (${submittedCount}/${submitLimit})`);
+      return false;
+    }
 
-    console.log('检查考试信息...');
+    console.log('检查考试题目类型...');
     // check subject summary
     const { subjects } = await exam.getSubjectsSummary(true);
 
-    console.log(
-      subjects.flatMap((s) =>
-        s.type != 'text' ? (s2s[s.type] ?? s.type) : [],
-      ),
+    const typeNames = subjects.flatMap((s) =>
+      s.type != 'text' ? (s2s[s.type] ?? s.type) : [],
     );
+    console.log('题目类型:', typeNames);
 
     const isSupportSubject = ({ type }: (typeof subjects)[number]) =>
       hasResolver(type);
@@ -427,6 +466,53 @@ export default class ExamProc implements Processor {
           : isSupportSubject(v),
       );
 
+    if (!test) {
+      const unsupported = subjects
+        .filter((v) => v.type != 'text')
+        .filter((v) => !isSupportSubject(v))
+        .map((v) => s2s[v.type] ?? v.type);
+      console.log('不支持的题目类型:', unsupported);
+    }
+
     return test;
+  }
+
+  /**
+   * 批量预获取 AI 答案
+   * 收集所有需要 AI 回答的题目，按 QPS 批量请求，然后将结果设置到各个 resolver
+   */
+  private async batchPrefetchAnswers(
+    questions: Array<{ id: SubjectId; type: string; description: string; options: Array<{ id: OptionId; content: string }> }>,
+    subjectResolverList: Partial<Record<SubjectId, BaseSubjectResolver>>,
+    aiModel: AIModel,
+  ) {
+    // 收集需要 AI 回答的题目
+    const batchRequests: BatchRequestItem[] = [];
+
+    for (const question of questions) {
+      const resolver = subjectResolverList[question.id];
+      if (!resolver) continue;
+
+      const reqData = resolver.getBatchRequestData();
+      if (reqData) {
+        batchRequests.push(reqData);
+      }
+    }
+
+    if (batchRequests.length === 0) {
+      console.log(chalk.gray('[批量AI] 所有题目已有答案，无需请求'));
+      return;
+    }
+
+    // 批量请求 AI
+    const results = await aiModel.batchRequest(batchRequests);
+
+    // 将结果设置到对应的 resolver
+    for (const [subjectId, result] of results) {
+      const resolver = subjectResolverList[subjectId];
+      if (resolver) {
+        resolver.setPrefetchedResult(result);
+      }
+    }
   }
 }

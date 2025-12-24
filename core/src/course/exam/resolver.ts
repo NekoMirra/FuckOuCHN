@@ -3,6 +3,7 @@ import { SubjectType } from '../../api/Exam.js';
 import BaseSubjectResolver, { Subject } from './BaseSubjectResolver.js';
 import MultipleSelection from './MultipleSelection.js';
 import SingleSelection from './SingleSelection.js';
+import ShortAnswer from './ShortAnswer.js';
 import TrueOrFalse from './TrueOrFalse.js';
 
 export const s2s: Record<SubjectType, string> = {
@@ -23,6 +24,7 @@ const table: Partial<
   single_selection: SingleSelection,
   true_or_false: TrueOrFalse,
   multiple_selection: MultipleSelection,
+  short_answer: ShortAnswer,
 };
 
 export function hasResolver(type: SubjectType) {

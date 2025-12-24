@@ -9,7 +9,10 @@ import { ims } from '@ims-tech-auto/core';
 import type { RunnerProgressEvent } from '@ims-tech-auto/core';
 import AIModel from '@ims-tech-auto/core/ai/AIModel.js';
 import HumanBehaviorPlugin from '@ims-tech-auto/core/plugins/HumanBehaviorPlugin.js';
-import Config from '@ims-tech-auto/core/config.js';
+import Config, { printConfigStatus } from '@ims-tech-auto/core/config.js';
+
+// 打印功能开关状态
+printConfigStatus();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.join(dirname(__filename), '..', '..');
@@ -136,6 +139,10 @@ async function createWindow() {
   uiReady = false;
   bufferedProgress.length = 0;
 
+  if (process.env._DEBUG_UI) {
+    uiWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+
   uiWindow.webContents.on('did-navigate', () => {
     // UI 页面被刷新/跳转后，需要重新握手
     uiReady = false;
@@ -155,6 +162,7 @@ async function createWindow() {
 }
 
 ipcMain.on('ims:ui:ready', (evt) => {
+  console.log('[Main] Received ims:ui:ready from renderer');
   // 确保是当前 uiWindow 发来的
   if (!uiWindow) return;
   if (evt.sender.id !== uiWindow.webContents.id) return;
@@ -162,14 +170,20 @@ ipcMain.on('ims:ui:ready', (evt) => {
   uiReady = true;
 
   if (bufferedInit) {
+    console.log('[Main] Sending buffered init to UI');
     uiWindow.webContents.send('ims:ui:init', bufferedInit);
   }
 
   if (bufferedProgress.length) {
+    console.log(`[Main] Sending ${bufferedProgress.length} buffered progress events`);
     for (const e of bufferedProgress.splice(0)) {
       uiWindow.webContents.send('ims:progress', e);
     }
   }
+});
+
+ipcMain.on('ims:log', (evt, msg) => {
+  console.log('[Renderer Log]', msg);
 });
 
 async function waitForCDP(url: string, timeout = 10000) {

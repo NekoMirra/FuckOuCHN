@@ -1,6 +1,8 @@
 import test, { expect } from '@playwright/test';
 import AIModel from '../src/ai/AIModel.js';
 
+const hasAIEnv = !!(process.env._API && process.env._KEY && process.env._MODEL);
+
 // test('测试AI连通', async () => {
 //   const aiModel = AIModel.init(true);
 //   expect(await aiModel, '连接失败').not.toBeNull();
@@ -10,6 +12,7 @@ import AIModel from '../src/ai/AIModel.js';
 const letters = (i: number) => ['A', 'B', 'C', 'D'][i];
 
 test('单项选择题测试', async () => {
+  test.skip(!hasAIEnv, '未配置 AI 环境变量（_API/_KEY/_MODEL），跳过在线 AI 测试');
   expect(await AIModel.init(true)).not.toBeNull();
   // 不同模型可能产生不同结果
   // 下面为星火大模型测试结果
@@ -51,6 +54,7 @@ test('单项选择题测试', async () => {
 });
 
 test('判断题测试', async () => {
+  test.skip(!hasAIEnv, '未配置 AI 环境变量（_API/_KEY/_MODEL），跳过在线 AI 测试');
   expect(await AIModel.init(true)).not.toBeNull();
 
   // AI回答A,正确答案为B

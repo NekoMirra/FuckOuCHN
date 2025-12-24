@@ -17,7 +17,21 @@ async function getMyCourses(page: number, page_size: number) {
   });
 }
 
-// https://lms.ouchn.cn/api/course/60000094011/all-activities?module_ids=[60000632770]&activity_types=learning_activities,exams,classrooms
+/**
+ * 获取课程的所有模块
+ * https://lms.ouchn.cn/api/courses/{courseId}/modules
+ */
+async function getModules(courseId: number) {
+  return await Api.get(`courses/${courseId}/modules`);
+}
+
+/**
+ * 获取课程的所有活动（可指定类型）
+ * https://lms.ouchn.cn/api/course/60000094011/all-activities?module_ids=[60000632770]&activity_types=learning_activities,exams,classrooms
+ * @param courseId 课程ID
+ * @param moduleIds 模块ID列表，为空则获取所有模块
+ * @param activityTypes 活动类型列表
+ */
 async function getAllActivities(
   courseId: number,
   moduleIds: number[],
@@ -26,9 +40,49 @@ async function getAllActivities(
   return await Api.get(`course/${courseId}/all-activities`, {
     params: {
       module_ids: `[${moduleIds.join(',')}]`,
-      activity_types: activityTypes.join(', '),
+      activity_types: activityTypes.join(','),
     },
   });
+}
+
+/**
+ * 直接通过 API 获取考试活动列表（无需解析 DOM）
+ * @param courseId 课程ID
+ * @returns 考试活动列表
+ */
+async function getExamActivities(courseId: number): Promise<Array<{
+  id: number;
+  title: string;
+  type: string;
+  module_id: number;
+  module_name: string;
+  completeness: string; // 'full' | 'part' | 'none'
+}>> {
+  // 1. 先获取所有模块
+  const modulesResp = await getModules(courseId);
+  const modules = modulesResp.data?.modules || modulesResp.data || [];
+
+  if (!modules.length) {
+    console.log('未找到课程模块');
+    return [];
+  }
+
+  const moduleIds = modules.map((m: any) => m.id);
+  const moduleMap = new Map(modules.map((m: any) => [m.id, m.name]));
+
+  // 2. 获取所有考试和随堂测试活动
+  const activitiesResp = await getAllActivities(courseId, moduleIds, ['exams', 'classrooms']);
+  const activities = activitiesResp.data?.activities || activitiesResp.data || [];
+
+  // 3. 格式化返回
+  return activities.map((act: any) => ({
+    id: act.id,
+    title: act.title || act.name,
+    type: act.type, // 'exam' | 'classroom'
+    module_id: act.module_id,
+    module_name: moduleMap.get(act.module_id) || '',
+    completeness: act.completeness || 'none',
+  }));
 }
 
 /**

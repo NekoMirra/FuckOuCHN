@@ -1,6 +1,6 @@
 import { format } from 'util';
 import { OptionId, SubjectType } from '../../api/Exam.js';
-import BaseSubjectResolver, { Option } from './BaseSubjectResolver.js';
+import BaseSubjectResolver, { BatchRequestItem, Option } from './BaseSubjectResolver.js';
 
 class SingleSelection extends BaseSubjectResolver {
   protected type: SubjectType = 'single_selection';
@@ -20,6 +20,22 @@ class SingleSelection extends BaseSubjectResolver {
     ];
   }
 
+  override getBatchRequestData(): BatchRequestItem | null {
+    if (this.isPass()) return null;
+
+    // 返回过滤后的选项
+    const opts = this.subject.options.flatMap((opt) =>
+      new Set(this.wrongOptions.map(({ id }) => id)).has(opt.id) ? [] : opt,
+    );
+
+    return {
+      id: this.subject.id,
+      type: this.type,
+      description: this.subject.description,
+      options: opts.map((o) => o.content),
+    };
+  }
+
   async getAnswer(): Promise<OptionId[]> {
     const { options, description } = this.subject;
 
@@ -35,9 +51,19 @@ class SingleSelection extends BaseSubjectResolver {
       if (!opt) throw new Error("impossable: can't find option???");
       return [opt.id];
     }
+
     const opts = options.flatMap((opt) =>
       new Set(this.wrongOptions.map(({ id }) => id)).has(opt.id) ? [] : opt,
     );
+
+    // 优先使用预获取的结果
+    if (this._prefetchedResult?.indices?.length) {
+      const idx = this._prefetchedResult.indices[0];
+      this.clearPrefetchedResult();
+      if (idx >= 0 && idx < opts.length) {
+        return [opts[idx].id];
+      }
+    }
 
     const answer = await this.aiModel.getResponse(
       this.type,

@@ -5,6 +5,11 @@ import { Subject } from '../../src/course/exam/BaseSubjectResolver';
 import { createResolver } from '../../src/course/exam/resolver.js';
 
 test('多选题决策', async () => {
+  test.skip(
+    !(process.env._API && process.env._KEY && process.env._MODEL),
+    '未配置 AI 环境变量（_API/_KEY/_MODEL），跳过在线 AI 测试',
+  );
+
   const question = {
     description: '下列关于通用计算机的描述中，正确的是  ______  。',
     difficulty_level: 'medium',

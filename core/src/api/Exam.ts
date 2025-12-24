@@ -142,15 +142,15 @@ export default class {
       exam_score: number | undefined;
       exam_score_rule: string | undefined;
       submissions:
-        | Array<{
-            created_at: string;
-            exam_id: number;
-            exam_type_text: string;
-            id: SubjectId;
-            score: string | null;
-            submitted_at: string;
-          }>
-        | undefined;
+      | Array<{
+        created_at: string;
+        exam_id: number;
+        exam_type_text: string;
+        id: SubjectId;
+        score: string | null;
+        submitted_at: string;
+      }>
+      | undefined;
     } = response.data;
 
     return submissions;
@@ -304,6 +304,7 @@ export default class {
     subjects: Array<{
       subjectId: SubjectId;
       answerOptionIds: OptionId[];
+      answerText?: string;
       updatedAt: string;
     }>,
     totalSubjects: number,
@@ -319,6 +320,7 @@ export default class {
       subjects: subjects.map((subject) => ({
         subject_id: subject.subjectId,
         answer_option_ids: subject.answerOptionIds,
+        ...(subject.answerText ? { answer_text: subject.answerText } : {}),
         subject_updated_at: subject.updatedAt,
       })),
     });

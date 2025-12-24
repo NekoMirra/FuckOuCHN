@@ -79,6 +79,48 @@ class IMSRunner {
   private readonly progressListeners = new Set<(e: RunnerProgressEvent) => void>();
   constructor() { }
 
+  private parseProgressValue(progress: CourseInfo['progress'], type?: CourseInfo['type']) {
+    // 考试的“完成度”并不可靠（可能需要反复提交到及格线），默认给予更高优先级
+    if (type === 'exam') return -1;
+
+    const p = String(progress ?? '').trim().toLowerCase();
+    if (!p) return 0;
+    if (p === 'full') return 100;
+    const m = p.match(/(\d+(?:\.\d+)?)\s*%/);
+    if (m) {
+      const v = Number(m[1]);
+      return Number.isFinite(v) ? v : 0;
+    }
+    const v = Number(p);
+    return Number.isFinite(v) ? v : 0;
+  }
+
+  private getLowestNDefault(desiredConcurrency: number) {
+    // 默认策略：只执行“进度最低的前 N 个课程”。
+    // N 默认为并发度（自动并发时通常是 6 / 课程数）。可用 _LOWEST_N 覆盖。
+    const raw = process.env._LOWEST_N;
+    if (raw == null || String(raw).trim() === '') return desiredConcurrency;
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n) || n <= 0) return desiredConcurrency;
+    return n;
+  }
+
+  private pickLowestProgressCourses(all: CourseInfo[], desiredConcurrency: number) {
+    const n = this.getLowestNDefault(desiredConcurrency);
+    const sorted = [...all].sort((a, b) => {
+      const pa = this.parseProgressValue(a.progress, a.type);
+      const pb = this.parseProgressValue(b.progress, b.type);
+      if (pa !== pb) return pa - pb;
+      // 同进度时按名称稳定排序，减少每次运行顺序抖动
+      const an = `${a.moduleName} ${a.syllabusName ?? ''} ${a.activityName}`;
+      const bn = `${b.moduleName} ${b.syllabusName ?? ''} ${b.activityName}`;
+      return an.localeCompare(bn, 'zh-CN');
+    });
+
+    const picked = sorted.slice(0, Math.min(Math.max(n, 1), sorted.length));
+    return { picked, pickedN: picked.length, totalN: all.length, n };
+  }
+
   onProgress(listener: (e: RunnerProgressEvent) => void) {
     this.progressListeners.add(listener);
     return () => this.progressListeners.delete(listener);
@@ -177,7 +219,6 @@ class IMSRunner {
     for (const item of selected) {
       console.log(chalk.bold('-'.repeat(60)));
       console.log(chalk.cyan(`开始执行课程组: ${item.title}`));
-      if (!item.percent) continue;
       await this.processCourseGroup(page, item);
     }
 
@@ -224,6 +265,122 @@ class IMSRunner {
       console.log(`${i + 1}. ${item.title}  ${item.percent ?? ''}`),
     );
 
+    const parseGroupPercent = (raw: ActivityInfo['percent']) => {
+      // completeness 有时是 "81.5"，也可能是 "81.5%" 或 null
+      const s = String(raw ?? '').trim();
+      if (!s) return NaN;
+      const m = s.match(/(\d+(?:\.\d+)?)/);
+      if (!m) return NaN;
+      const n = Number(m[1]);
+      return Number.isFinite(n) ? n : NaN;
+    };
+
+    const pickUncompleted = () => {
+      const uncompleted = listItems.filter((it) => {
+        const p = parseGroupPercent(it.percent);
+        // percent 为空/解析失败时不强行过滤；有时接口不返回百分比。
+        if (!Number.isFinite(p)) return true;
+        return p < 100;
+      });
+      return uncompleted.length > 0 ? uncompleted : listItems;
+    };
+
+    const getGroupLowestN = () => {
+      const raw = process.env._GROUP_LOWEST_N ?? process.env._LOWEST_GROUP_N;
+      if (raw == null || String(raw).trim() === '') return 3;
+      const n = Math.floor(Number(String(raw).trim()));
+      return Number.isFinite(n) && n > 0 ? n : 3;
+    };
+
+    const pickLowestGroups = () => {
+      const candidates = pickUncompleted();
+      const n = Math.min(getGroupLowestN(), candidates.length);
+      const sorted = [...candidates].sort((a, b) => {
+        const pa = parseGroupPercent(a.percent);
+        const pb = parseGroupPercent(b.percent);
+
+        // 无法解析时放后面，尽量先跑“明确进度低”的
+        const aBad = !Number.isFinite(pa);
+        const bBad = !Number.isFinite(pb);
+        if (aBad !== bBad) return aBad ? 1 : -1;
+        if (Number.isFinite(pa) && Number.isFinite(pb) && pa !== pb) return pa - pb;
+
+        // 同进度时按标题稳定排序
+        return a.title.localeCompare(b.title, 'zh-CN');
+      });
+      return sorted.slice(0, n);
+    };
+
+    // 1) 环境变量强制选择（用于 Electron/无控制台环境，或“无法输入序号”的场景）
+    const envIndexRaw =
+      process.env._GROUP_INDEX ?? process.env._GROUP ?? process.env._COURSE_GROUP;
+    if (envIndexRaw != null && String(envIndexRaw).trim() !== '') {
+      const n = Number(String(envIndexRaw).trim());
+      if (Number.isFinite(n)) {
+        const idx = Math.floor(n);
+        if (idx === 0) return listItems;
+        if (idx >= 1 && idx <= listItems.length) return [listItems[idx - 1]];
+        console.warn(
+          chalk.yellow(
+            `⚠️ _GROUP_INDEX=${envIndexRaw} 超出范围(1..${listItems.length})，将使用默认策略。`,
+          ),
+        );
+      } else {
+        console.warn(
+          chalk.yellow(`⚠️ _GROUP_INDEX=${envIndexRaw} 不是数字，将使用默认策略。`),
+        );
+      }
+    }
+
+    const envTitleRaw = process.env._GROUP_TITLE;
+    if (envTitleRaw && String(envTitleRaw).trim()) {
+      const raw = String(envTitleRaw).trim();
+      let matcher: (t: string) => boolean;
+      if (raw.startsWith('/') && raw.endsWith('/') && raw.length > 2) {
+        try {
+          const re = new RegExp(raw.slice(1, -1));
+          matcher = (t) => re.test(t);
+        } catch {
+          matcher = (t) => t.includes(raw);
+        }
+      } else {
+        const needle = raw.toLowerCase();
+        matcher = (t) => t.toLowerCase().includes(needle);
+      }
+
+      const matched = listItems.filter((it) => matcher(it.title));
+      if (matched.length > 0) {
+        console.log(
+          chalk.gray(
+            `\n✅ 使用 _GROUP_TITLE 匹配到 ${matched.length} 个课程组：${matched
+              .map((x) => x.title)
+              .join('、')}`,
+          ),
+        );
+        return matched;
+      }
+      console.warn(
+        chalk.yellow(`⚠️ _GROUP_TITLE 未匹配到课程组：${raw}，将使用默认策略。`),
+      );
+    }
+
+    // 2) 非交互环境：不要卡住等待输入，直接走默认策略
+    const nonInteractive =
+      !process.stdin.isTTY ||
+      String(process.env._NON_INTERACTIVE ?? '').trim() === '1' ||
+      String(process.env._NON_INTERACTIVE ?? '').trim().toLowerCase() === 'true';
+    if (nonInteractive) {
+      const chosen = pickLowestGroups();
+      console.log(
+        chalk.gray(
+          `\n🧭 当前为非交互模式（无法从控制台读取输入），默认执行进度最低的前 ${chosen.length} 个课程组：${chosen
+            .map((x) => `${x.title}(${x.percent ?? '?'})`)
+            .join('、')}（可用 _GROUP_LOWEST_N 调整）`,
+        ),
+      );
+      return chosen;
+    }
+
     const timeoutPromise = new Promise<string>((resolve) =>
       setTimeout(() => resolve(''), 20000),
     );
@@ -236,21 +393,16 @@ class IMSRunner {
 
     // 超时/空输入：默认只跑“未完成的课程组”（避免直接全刷导致窗口/日志很乱）。
     if (!userInput) {
-      const uncompleted = listItems.filter((it) => {
-        const p = String(it.percent ?? '').trim();
-        // percent 为空时不强行过滤；有时接口不返回百分比。
-        if (!p) return true;
-        return !/100\s*%/.test(p);
-      });
-      if (uncompleted.length > 0) {
+      const chosen = pickLowestGroups();
+      if (chosen.length > 0) {
         console.log(
           chalk.gray(
-            `\n⏱️ 超时未选择，默认执行未完成课程组：${uncompleted
-              .map((x) => x.title)
-              .join('、')}`,
+            `\n⏱️ 超时未选择，默认执行进度最低的前 ${chosen.length} 个课程组：${chosen
+              .map((x) => `${x.title}(${x.percent ?? '?'})`)
+              .join('、')}（可用 _GROUP_LOWEST_N 调整）`,
           ),
         );
-        return uncompleted;
+        return chosen;
       }
 
       console.log(chalk.gray('\n⏱️ 超时未选择，未找到“未完成课程组”，回退为全部课程组'));
@@ -269,14 +421,28 @@ class IMSRunner {
   // 执行课程组
   private async processCourseGroup(page: Page, item: ActivityInfo) {
     try {
-      const courses = (await Search.getUncompletedCourses(page, item)).filter(
+      const allCourses = (await Search.getUncompletedCourses(page, item)).filter(
         (course) => course.progress != 'full' || course.type == 'exam',
       );
 
       // 防止复选框影响
       await page.locator('input[type="checkbox"]').setChecked(false);
 
+      const desiredConcurrency = this.resolveConcurrencyForCourses(allCourses.length);
+      const { picked: courses, pickedN, totalN } = this.pickLowestProgressCourses(
+        allCourses,
+        desiredConcurrency,
+      );
       const concurrency = this.resolveConcurrencyForCourses(courses.length);
+
+      if (totalN > 0 && pickedN > 0 && pickedN < totalN) {
+        console.log(
+          chalk.gray(
+            `[${item.title}] 默认只执行进度最低的前 ${pickedN} 个课程（共 ${totalN} 个候选）。` +
+            ` 可通过 _LOWEST_N 调整执行数量。`,
+          ),
+        );
+      }
 
       this.emitProgress({
         kind: 'groupStart',

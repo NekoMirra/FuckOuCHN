@@ -5,11 +5,13 @@ export default defineConfig({
   timeout: 0, // 每个测试的超时时间
   retries: 1, // 测试失败时的重试次数
   use: {
-    launchOptions: {
-      executablePath: process.env._CHROME_DEV!,
-      ignoreDefaultArgs: ['--headless=old'],
-      args: ['--headless=new']
-    },
+    launchOptions: process.env._CHROME_DEV
+      ? {
+        executablePath: process.env._CHROME_DEV,
+        ignoreDefaultArgs: ['--headless=old'],
+        args: ['--headless=new'],
+      }
+      : undefined,
     headless: true, // 是否启用无头模式
     viewport: { width: 1280, height: 720 }, // 浏览器窗口尺寸
     screenshot: 'only-on-failure', // 测试失败时截取屏幕

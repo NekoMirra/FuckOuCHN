@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 import { CourseProgress, CourseInfo } from './search.js';
+import Config from '../config.js';
 
 const COURSE_TYPE = {
   web_link: '线上链接',
@@ -72,14 +73,21 @@ interface Processor {
   exec: (page: Page) => Promise<void>;
 }
 
-const processorTable: Partial<Record<CourseType, Processor>> = {};
+type ProcessorCtor = new () => Processor;
 
-function registerProcessor(processor: Processor) {
-  processorTable[processor.name] = processor;
+// IMPORTANT:
+// Processor 默认导出是 class，我们必须「每次处理课程」都创建新实例。
+// 否则在并发模式下，单例 Processor 内部保存的状态（例如 ExamProc.#courseInfo）会被不同 worker 覆盖，
+// 导致出现 “error course info is null / Cannot read properties of undefined (reading 'activityId')”。
+const processorTable: Partial<Record<CourseType, ProcessorCtor>> = {};
+
+function registerProcessor(ctor: ProcessorCtor, name: CourseType) {
+  processorTable[name] = ctor;
 }
 
 function getProcessor(name: CourseType) {
-  return processorTable[name];
+  const ctor = processorTable[name];
+  return ctor ? new ctor() : void 0;
 }
 
 function isProcessor(obj: any): obj is Processor {
@@ -91,6 +99,29 @@ function isProcessor(obj: any): obj is Processor {
     (obj.condition === void 0 || typeof obj.condition === 'function') &&
     typeof obj.exec == 'function'
   );
+}
+
+// 视频类处理器名称列表
+const VIDEO_PROCESSORS: CourseType[] = ['online_video', 'lesson', 'lesson_replay', 'slide'];
+// 答题类处理器名称列表
+const EXAM_PROCESSORS: CourseType[] = ['exam', 'classroom'];
+// 其他类处理器（页面、讨论、资料等）
+const OTHER_PROCESSORS: CourseType[] = ['page', 'material', 'forum', 'web_link', 'tencent_meeting', 'homework'];
+
+// 判断处理器是否应该启用
+function shouldEnableProcessor(name: CourseType): boolean {
+  if (VIDEO_PROCESSORS.includes(name)) {
+    return Config.features.enableVideo;
+  }
+  if (EXAM_PROCESSORS.includes(name)) {
+    return Config.features.enableExam;
+  }
+  if (OTHER_PROCESSORS.includes(name)) {
+    // 其他处理器：只有当视频开启时才启用（因为它们通常是刷课的一部分）
+    return Config.features.enableVideo;
+  }
+  // 未分类的处理器默认启用
+  return true;
 }
 
 // 获取当前模块的路径
@@ -111,9 +142,17 @@ fs.readdirSync(scriptsFolder)
 
     await import(fileUrl.href) // 使用合法的 file:// URL
       .then((m) => {
-        const processor = new m.default();
+        const Ctor = m.default as ProcessorCtor;
+        const processor = new Ctor();
+
         if (isProcessor(processor)) {
-          registerProcessor(processor);
+          // 根据功能开关决定是否注册
+          if (shouldEnableProcessor(processor.name)) {
+            registerProcessor(Ctor, processor.name);
+            console.log(`✅ 已注册处理器: ${processor.name} (${getCourseType(processor.name)})`);
+          } else {
+            console.log(`⏭️ 跳过处理器: ${processor.name} (${getCourseType(processor.name)}) - 功能已关闭`);
+          }
         } else {
           throw new Error(`文件: ${filePath} 不是一个 Processor`);
         }
