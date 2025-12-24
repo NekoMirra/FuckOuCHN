@@ -15,64 +15,64 @@ import { ActivityInfo } from './activity.js';
 
 type RunnerProgressEvent =
   | {
-      kind: 'groupStart';
-      groupTitle: string;
-      totalCourses: number;
-      concurrency: number;
-      ts: number;
-    }
+    kind: 'groupStart';
+    groupTitle: string;
+    totalCourses: number;
+    concurrency: number;
+    ts: number;
+  }
   | {
-      kind: 'groupEnd';
-      groupTitle: string;
-      ts: number;
-    }
+    kind: 'groupEnd';
+    groupTitle: string;
+    ts: number;
+  }
   | {
-      kind: 'groupError';
-      groupTitle: string;
-      message: string;
-      ts: number;
-    }
+    kind: 'groupError';
+    groupTitle: string;
+    message: string;
+    ts: number;
+  }
   | {
-      kind: 'courseStart';
-      groupTitle: string;
-      workerTag?: string;
-      index: number;
-      total: number;
-      course: Pick<
-        CourseInfo,
-        'moduleName' | 'syllabusName' | 'activityName' | 'type' | 'progress' | 'activityId'
-      >;
-      ts: number;
-    }
+    kind: 'courseStart';
+    groupTitle: string;
+    workerTag?: string;
+    index: number;
+    total: number;
+    course: Pick<
+      CourseInfo,
+      'moduleName' | 'syllabusName' | 'activityName' | 'type' | 'progress' | 'activityId'
+    >;
+    ts: number;
+  }
   | {
-      kind: 'courseDone';
-      groupTitle: string;
-      workerTag?: string;
-      index: number;
-      total: number;
-      course: Pick<CourseInfo, 'activityName' | 'type' | 'activityId'>;
-      ts: number;
-    }
+    kind: 'courseDone';
+    groupTitle: string;
+    workerTag?: string;
+    index: number;
+    total: number;
+    course: Pick<CourseInfo, 'activityName' | 'type' | 'activityId'>;
+    ts: number;
+  }
   | {
-      kind: 'courseSkip';
-      groupTitle: string;
-      workerTag?: string;
-      index: number;
-      total: number;
-      reason: string;
-      course: Pick<CourseInfo, 'activityName' | 'type' | 'activityId'>;
-      ts: number;
-    }
+    kind: 'courseSkip';
+    groupTitle: string;
+    workerTag?: string;
+    index: number;
+    total: number;
+    reason: string;
+    course: Pick<CourseInfo, 'activityName' | 'type' | 'activityId'>;
+    ts: number;
+  }
   | {
-      kind: 'courseError';
-      groupTitle: string;
-      workerTag?: string;
-      index: number;
-      total: number;
-      message: string;
-      course: Pick<CourseInfo, 'activityName' | 'type' | 'activityId'>;
-      ts: number;
-    };
+    kind: 'courseError';
+    groupTitle: string;
+    workerTag?: string;
+    index: number;
+    total: number;
+    message: string;
+    course: Pick<CourseInfo, 'activityName' | 'type' | 'activityId'>;
+    ts: number;
+  };
 
 class IMSRunner {
   private page?: Page;

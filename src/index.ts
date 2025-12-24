@@ -225,11 +225,11 @@ async function connectToElectron() {
   await AIModel.init(true);
 
   const session = ims.login(browser, {
-      ...Config.user,
-      loginApi: Config.urls.login(),
-      homeApi: Config.urls.home(),
+    ...Config.user,
+    loginApi: Config.urls.login(),
+    homeApi: Config.urls.home(),
 
-    });
+  });
 
   // 转发 core 的进度事件到 UI
   session.onProgress((e: RunnerProgressEvent) => {
