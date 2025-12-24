@@ -1,16 +1,20 @@
 ### 国开自动刷课程序 (基于 Node.js Electron 和 Playwright)
 
 ### 可直接下载并使用 Electron 打包版
+
 点击以下链接下载可执行安装程序：
 [ImsTechAuto](https://github.com/2468785842/ImsTech/releases/latest/download/ImsTechAuto.exe)
 
 ### 或者从源码运行
 
 #### 准备工作
+
 1. 安装 [Node.js](https://nodejs.org/zh-cn)
 
 #### 配置
+
 1. 在项目的根目录创建一个 `.env` 文件，并添加以下内容：
+
 ```properties
 _ACCOUNT="xxx" # 你的账号
 _PASSWORD="xxx" # 你的密码
@@ -39,33 +43,41 @@ _PASSWORD="xxx" # 你的密码
 ```
 
 #### 运行程序
+
 1. 安装 `yarn`：
+
    ```bash
    npm install -g yarn --registry=https://registry.npmmirror.com
    ```
 
 2. 配置镜像源：
+
    ```bash
    yarn config set registry https://registry.npmmirror.com
    ```
 
 3. 安装依赖库：
+
    ```bash
    yarn install
    ```
 
 4. 启动程序：
+
    ```bash
    yarn start:electron
    ```
 
 #### 注意事项
+
 - **操作浏览器时：**
   - 登录时可能需要手动处理人机验证。
   - 登录完成后，尽量不要操作浏览器，以免发生错误。
 
 #### 代码风格
+
 - 使用 Prettier 格式化代码。提交前请确保代码已格式化。可以使用以下命令格式化：
+
   ```bash
   npx prettier --write ./src ./core/src
   ```
@@ -73,16 +85,20 @@ _PASSWORD="xxx" # 你的密码
 ### Electron 打包
 
 #### 配置淘宝镜像
+
 设置 Electron 镜像源：
+
 ```bash
 $ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 $ELECTRON_CUSTOM_DIR="v{{ version }}"
 ```
 
 #### 打包成可执行文件
+
 - 打包应用：
+
   ```bash
   yarn build:electron
   ```
 
-#### 下载和打包 Electron 时需要使用镜像或科学上网工具。
+#### 下载和打包 Electron 时需要使用镜像或科学上网工具

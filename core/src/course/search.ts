@@ -1,6 +1,6 @@
 /**
  * 课程活动获取模块（纯 API 方式）
- * 
+ *
  * 重构后完全使用 API 获取活动列表，废弃了所有 DOM 遍历代码。
  * 优势：
  * - 速度快（1-3秒 vs 5-15秒）
@@ -39,7 +39,7 @@ function normalizeCourseTypeFromApi(v: any): CourseType {
 
 /**
  * 高效获取课程活动列表（纯 API 方式）
- * 
+ *
  * 流程：
  * 1. 获取 modules 列表
  * 2. 获取 all-activities
@@ -93,7 +93,7 @@ async function getCoursesViaApi(courseId: number): Promise<CourseInfo[]> {
 
 /**
  * 获取未完成的课程活动
- * 
+ *
  * @param _page - 保留参数兼容性，实际不再使用
  * @param activityInfo - 课程组信息
  */

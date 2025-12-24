@@ -148,12 +148,12 @@ async function getActivityReadsForUser(courseId: number): Promise<ActivityRead[]
 
 /**
  * 高效获取课程所有活动及完成状态（纯 API，无需 DOM）
- * 
+ *
  * 1. 获取 modules 列表
  * 2. 获取 all-activities（所有活动）
  * 3. 获取 my-completeness（已完成列表）
  * 4. 合并计算每个活动的完成状态
- * 
+ *
  * @returns 所有活动及其完成状态
  */
 async function getUncompletedActivitiesFast(courseId: number): Promise<{

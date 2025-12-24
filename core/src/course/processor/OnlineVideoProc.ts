@@ -64,7 +64,7 @@ export default class OnlineVideoProc implements Processor {
     await page
       .locator('div.mvp-replay-player-all-controls')
       .evaluate((el) => el.classList.remove('mvp-replay-player-hidden-control'))
-      .catch(() => {});
+      .catch(() => { });
   }
 
   private async setPlaybackRate(page: Page, mediaType: 'video' | 'audio') {
@@ -85,9 +85,9 @@ export default class OnlineVideoProc implements Processor {
       mediaType === 'video'
         ? (await page.locator('div.mvp-time-display').textContent())!.split('/')
         : [
-            (await page.locator('.current-time').textContent())!,
-            (await page.locator('.duration').textContent())!,
-          ];
+          (await page.locator('.current-time').textContent())!,
+          (await page.locator('.duration').textContent())!,
+        ];
     return [start.trim(), end.trim()];
   }
 
@@ -133,7 +133,7 @@ export default class OnlineVideoProc implements Processor {
           lastCur = '';
           return;
         }
-        
+
         const cur = await page.evaluate(() => {
           const el =
             document.querySelector('video') || document.querySelector('audio');
@@ -182,7 +182,7 @@ export default class OnlineVideoProc implements Processor {
       if (cur !== prev) {
         progress.tick(
           this.timeStringToNumber(cur) -
-            this.timeStringToNumber(prev || '00:00'),
+          this.timeStringToNumber(prev || '00:00'),
           {
             tcur: cur,
             tend: end,

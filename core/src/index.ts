@@ -705,7 +705,7 @@ class IMSRunner {
     if (!canExecWithoutOpen) {
       const activityUrl = this.getActivityUrl(course);
       console.log(chalk.gray(`${prefix}导航到活动页面...`));
-      
+
       try {
         await page.goto(activityUrl, {
           timeout: 30000,
@@ -732,7 +732,7 @@ class IMSRunner {
       }
     }
 
-        await errorWithRetry(`处理课程: ${course.activityName}`, 3)
+    await errorWithRetry(`处理课程: ${course.activityName}`, 3)
       .retry(async () => {
         await page.reload({ timeout: 60000 });
       })

@@ -19,6 +19,7 @@ GET /api/my-courses?conditions={"status":["ongoing"],"keyword":""}&page=1&page_s
 ```
 
 **关键返回字段**:
+
 - `courses[].id` - 课程 ID
 - `courses[].name` - 课程名称
 - `courses[].completeness` - **完成度百分比**（直接返回，无需计算！）
@@ -32,6 +33,7 @@ GET /api/courses/{courseId}/modules
 ```
 
 **响应示例**:
+
 ```json
 {
   "modules": [
@@ -49,6 +51,7 @@ GET /api/course/{courseId}/all-activities?module_ids=[id1,id2,...]&activity_type
 ```
 
 **关键返回字段**:
+
 - `learning_activities[]` - 学习活动列表
 - `exams[]` - 考试列表（含 `activity_final_score`, `submit_times`）
 - `classrooms[]` - 课堂活动列表
@@ -64,6 +67,7 @@ GET /api/course/{courseId}/my-completeness
 ```
 
 **响应示例**:
+
 ```json
 {
   "completed_result": {
@@ -90,6 +94,7 @@ GET /api/course/{courseId}/activity-reads-for-user
 ```
 
 **响应示例**:
+
 ```json
 {
   "activity_reads": [
@@ -118,6 +123,7 @@ GET /api/course/{courseId}/activity-reads-for-user
 ```
 
 **性能对比**:
+
 - DOM 遍历方式：需要页面导航 + 展开模块 + 遍历元素，耗时 5-15 秒
 - API 方式：3 个并发请求，耗时 200-500ms
 

@@ -102,12 +102,12 @@ class ErrorWithRetry {
   private failedTask: (e: any) => void = (e) => {
     throw e;
   };
-  private retryTask: () => Promise<void> | void = async () => {};
+  private retryTask: () => Promise<void> | void = async () => { };
 
   constructor(
     private taskName: string,
     private maxCnt: number,
-  ) {}
+  ) { }
 
   async run(task: () => Promise<void> | void) {
     let lastError: any;
