@@ -99,7 +99,7 @@ function parseDOMText(page: Page, str: string) {
 }
 
 class ErrorWithRetry {
-  private failedTask: (e: any) => void = (e) => {
+  private failedTask: (e: any) => Promise<void> | void = (e) => {
     throw e;
   };
   private retryTask: () => Promise<void> | void = async () => { };
@@ -135,10 +135,10 @@ class ErrorWithRetry {
 
     // 所有重试都失败
     console.error(`任务: ${this.taskName} 执行失败, 并且达到最大重试次数.`);
-    this.failedTask(lastError);
+    await this.failedTask(lastError);
   }
 
-  failed(callback: (e: any) => void) {
+  failed(callback: (e: any) => Promise<void> | void) {
     this.failedTask = callback;
     return this;
   }

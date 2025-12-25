@@ -714,6 +714,14 @@ class IMSRunner {
         await waitForSPALoaded(page);
       } catch (e) {
         console.warn(`${prefix}⚠️ 无法打开活动页面，跳过: ${course.activityName}`);
+
+        // 页面打开失败时也检查风控状态
+        const isBlocked = await this.checkRiskStatus(page);
+        if (isBlocked) {
+          console.error(chalk.bgRed(`${prefix}❌ 检测到风控，停止执行`));
+          throw new Error('账号被风控封禁');
+        }
+
         this.emitProgress({
           kind: 'courseSkip',
           groupTitle,
@@ -734,10 +742,22 @@ class IMSRunner {
 
     await errorWithRetry(`处理课程: ${course.activityName}`, 3)
       .retry(async () => {
+        // 重试前检查风控状态
+        const isBlocked = await this.checkRiskStatus(page);
+        if (isBlocked) {
+          console.error(chalk.bgRed(`${prefix}❌ 检测到风控，停止重试`));
+          throw new Error('账号被风控封禁');
+        }
         await page.reload({ timeout: 60000 });
       })
-      .failed((e) => {
+      .failed(async (e) => {
         console.log(`执行出错: ${e}`);
+
+        // 最终失败时也检查风控状态
+        const isBlocked = await this.checkRiskStatus(page);
+        if (isBlocked) {
+          console.error(chalk.bgRed(`${prefix}❌ 检测到风控，账号可能已被封禁`));
+        }
 
         this.emitProgress({
           kind: 'courseError',
