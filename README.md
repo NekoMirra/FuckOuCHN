@@ -1,104 +1,156 @@
-### 国开自动刷课程序 (基于 Node.js Electron 和 Playwright)
+# FuckOuCHN
 
-### 可直接下载并使用 Electron 打包版
+> 国开自动刷课程序 - 基于 Node.js、Electron 和 Playwright
 
-点击以下链接下载可执行安装程序：
-[ImsTechAuto](https://github.com/2468785842/ImsTech/releases/latest/download/ImsTechAuto.exe)
+一款自动化刷课工具，支持视频播放、自动答题、并发处理等功能。
 
-### 或者从源码运行
+## ✨ 功能特性
 
-#### 准备工作
+- 🎬 **视频自动播放** - 支持倍速播放（最高 16 倍速）
+- 📝 **AI 自动答题** - 支持单选、多选、判断、简答等题型
+- 🚀 **并发刷课** - 多窗口并行处理，效率翻倍
+- 📊 **进度面板** - 实时显示刷课进度
+- 🛡️ **风控检测** - 自动检测账号封禁状态
+- 📄 **PDF 自动浏览** - 自动滚动资料页面
 
-1. 安装 [Node.js](https://nodejs.org/zh-cn)
+## 📦 快速开始
 
-#### 配置
+### 方式一：下载可执行文件（推荐）
 
-1. 在项目的根目录创建一个 `.env` 文件，并添加以下内容：
+直接下载打包好的程序，无需安装任何依赖：
 
-```properties
-_ACCOUNT="xxx" # 你的账号
-_PASSWORD="xxx" # 你的密码
+👉 [下载 FuckOuCHN.exe](https://github.com/NekoMirra/FuckOuCHN/releases/latest)
 
-# _SLOW_MO_MIN=3000 # 可选，最小执行间隔（毫秒）
-# _SLOW_MO_MAX=9000 # 可选，最大执行间隔（毫秒）
+### 方式二：从源码运行
 
-# _HEAD_LESS=1 # 可选，是否启用无头模式，默认不启用,参数为空则显示浏览器窗口。
-# _PLAY_RATE=16 # 可选，视频播放倍速，默认倍速为 8。
-# _TOTAL_POINTS=100 # 可选，考试及格分数，AI 答题分数超过此值时会自动结束当前考试。
+#### 1. 环境准备
 
-# _EXAM_MAX_RETRIES=2 # 可选，考试未达预期时的最大重试次数；达到上限后将跳过该考试。
-
-########## 以下功能不稳定，如有问题请提交 issue ##########
-
-# 可选，开启自动答题功能
-# 目前仅支持单选题、判断题、多选题(选项<5)和随机题目，暂不支持简答题和其他题目。
-# _API="https://spark-api-open.xf-yun.com/v1" # AI 答题 API 接口
-# _KEY="nxetovst4bY1v0hUIk8L:NxYXC44THZHkVUmWLLGb" # API 密钥（此为示例，无法使用）
-# _MODEL="lite" # 模型名
-# _Qps=2 # 可选，每秒查询次数，默认为 1。
-
-# 可选，设置代理（仅用于 AI 和 axios，浏览器不受影响）
-# _PROXY_HOST=127.0.0.1
-# _PROXY_PORT=8080
-```
-
-#### 运行程序
-
-1. 安装 `yarn`：
-
-   ```bash
-   npm install -g yarn --registry=https://registry.npmmirror.com
-   ```
-
-2. 配置镜像源：
-
-   ```bash
-   yarn config set registry https://registry.npmmirror.com
-   ```
-
-3. 安装依赖库：
-
-   ```bash
-   yarn install
-   ```
-
-4. 启动程序：
-
-   ```bash
-   yarn start:electron
-   ```
-
-#### 注意事项
-
-- **操作浏览器时：**
-  - 登录时可能需要手动处理人机验证。
-  - 登录完成后，尽量不要操作浏览器，以免发生错误。
-
-#### 代码风格
-
-- 使用 Prettier 格式化代码。提交前请确保代码已格式化。可以使用以下命令格式化：
-
-  ```bash
-  npx prettier --write ./src ./core/src
-  ```
-
-### Electron 打包
-
-#### 配置淘宝镜像
-
-设置 Electron 镜像源：
+- 安装 [Node.js](https://nodejs.org/zh-cn) (v18+)
+- 安装 [Yarn](https://yarnpkg.com/)
 
 ```bash
-$ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$ELECTRON_CUSTOM_DIR="v{{ version }}"
+npm install -g yarn --registry=https://registry.npmmirror.com
 ```
 
-#### 打包成可执行文件
+#### 2. 克隆项目
 
-- 打包应用：
+```bash
+git clone https://github.com/NekoMirra/FuckOuCHN.git
+cd FuckOuCHN
+```
 
-  ```bash
-  yarn build:electron
-  ```
+#### 3. 配置账号
 
-#### 下载和打包 Electron 时需要使用镜像或科学上网工具
+```bash
+# 复制配置模板
+cp .env.template .env
+
+# 编辑 .env 文件，填写你的账号和密码
+```
+
+#### 4. 安装依赖
+
+```bash
+yarn config set registry https://registry.npmmirror.com
+yarn install
+```
+
+#### 5. 启动程序
+
+```bash
+yarn start:electron
+```
+
+## ⚙️ 配置说明
+
+编辑 `.env` 文件进行配置：
+
+### 必填配置
+
+```properties
+_ACCOUNT="你的账号"
+_PASSWORD="你的密码"
+```
+
+### 功能开关
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `_ENABLE_VIDEO` | 视频刷课开关（1=开启，0=关闭） | 1 |
+| `_ENABLE_EXAM` | 自动答题开关（1=开启，0=关闭） | 1 |
+| `_PLAY_RATE` | 视频播放倍速 | 8 |
+| `_TOTAL_POINTS` | 考试及格分数，达到后自动结束 | 60 |
+
+### AI 答题配置
+
+```properties
+_API="https://api.openai.com/v1"  # API 接口地址
+_KEY="your-api-key"                # API 密钥
+_MODEL="gpt-4o-mini"               # 模型名称
+_Qps=1                             # 每秒请求数
+```
+
+### 并发配置
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `_CONCURRENCY` | 并发窗口数（0=自动，1-6=固定） | 1 |
+| `_SHOW_WORKERS` | 显示所有窗口（0=只显示主窗口） | 0 |
+| `_UI_TOPMOST` | 进度面板置顶 | 1 |
+
+### 课程选择
+
+```properties
+# 选择特定课程组
+_GROUP_INDEX=0          # 0=全部，1-N=指定序号
+_GROUP_TITLE=英语       # 按标题模糊匹配
+
+# 执行策略
+_LOWEST_N=10            # 只处理进度最低的 N 个课程
+_NON_INTERACTIVE=1      # 非交互模式
+```
+
+完整配置请参考 [.env.template](.env.template)
+
+## ⚠️ 注意事项
+
+1. **人机验证** - 登录时可能需要手动完成验证
+2. **避免操作** - 程序运行时请勿操作浏览器窗口
+3. **风控提示** - 如果账号被检测到异常，会自动暂停并提示
+4. **合理使用** - 建议设置合理的并发数和倍速，避免触发风控
+
+## 🔨 开发相关
+
+### 本地开发
+
+```bash
+# 编译 TypeScript
+yarn build
+
+# 启动程序
+yarn start:electron
+```
+
+### 打包发布
+
+```bash
+# 设置 Electron 镜像（可选）
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
+# 打包
+yarn build:electron
+```
+
+### 代码格式化
+
+```bash
+npx prettier --write ./src ./core/src
+```
+
+## 📄 License
+
+[MIT](LICENSE)
+
+## 🙏 致谢
+
+本项目基于 [ImsTech](https://github.com/2468785842/ImsTech) 二次开发
