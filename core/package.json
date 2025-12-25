@@ -1,7 +1,7 @@
 {
   "name": "@ims-tech-auto/core",
   "version": "1.0.0",
-  "description": "this is imstech auto control script",
+  "description": "this is 国开精灵auto control script",
   "exports": {
     ".": "./dist/src/index.js",
     "./*": "./dist/src/*"

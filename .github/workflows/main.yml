@@ -28,6 +28,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ImsTechAuto.exe
+          name:国开精灵.exe
           path: |
             dist/ImsTechAuto.exe

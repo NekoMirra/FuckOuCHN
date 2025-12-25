@@ -11,12 +11,12 @@ export default class Material implements Processor {
   private async scrollToBottom(page: Page) {
     // 尝试滚动 file-previewer 中的内容
     const previewerContent = page.locator('#file-previewer .content, #file-previewer .file-content, #file-previewer iframe');
-    
+
     try {
       // 先尝试滚动 iframe 内容（PDF 预览通常在 iframe 中）
       const iframe = page.frameLocator('#file-previewer iframe');
       const iframeBody = iframe.locator('body, html');
-      
+
       if (await iframeBody.count() > 0) {
         await iframeBody.first().evaluate((el) => {
           el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
