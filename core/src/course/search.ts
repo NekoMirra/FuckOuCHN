@@ -20,12 +20,14 @@ type CourseInfo = {
   courseId: number;  // 课程组 ID，用于构建活动访问 URL
   moduleId: string;
   moduleName: string;
+  moduleSort: number;  // 模块排序
   syllabusId: string | null;
   syllabusName: string | null;
   type: CourseType;
   activityId: number;
   activityName: string;
   progress: CourseProgress;
+  sort: number;  // 活动排序
 };
 
 function normalizeCourseTypeFromApi(v: any): CourseType {
@@ -79,12 +81,14 @@ async function getCoursesViaApi(courseId: number): Promise<CourseInfo[]> {
       courseId,
       moduleId: act.moduleId,
       moduleName: act.moduleName,
+      moduleSort: act.moduleSort ?? 0,
       syllabusId: act.syllabus_id ? String(act.syllabus_id) : null,
       syllabusName: null,
       type,
       activityId: act.id,
       activityName: act.title ?? '',
       progress: act.progress,
+      sort: act.sort ?? 0,
     };
   });
 

@@ -10,13 +10,21 @@ import { API_BASE_URL } from '../config.js';
 //    ....
 //   二、判断题
 //    ....
+// cloze 完形填空
+// fill_in_blank 填空题
+// matching 匹配题
+// analysis 分析题
 export type SubjectType =
   | 'random'
   | 'text'
   | 'true_or_false'
   | 'single_selection'
   | 'multiple_selection'
-  | 'short_answer';
+  | 'short_answer'
+  | 'cloze'
+  | 'fill_in_blank'
+  | 'matching'
+  | 'analysis';
 export type SubjectId = number;
 export type OptionId = number;
 
@@ -181,6 +189,7 @@ export default class {
       submission_data: {
         subjects: Array<{
           answer_option_ids: OptionId[];
+          answer_text?: string; // 简答/填空/完形填空/分析题的答案文本
           subject_id: SubjectId;
           subject_updated_at: string;
         }>;
@@ -246,6 +255,20 @@ export default class {
         }>;
         point: string; // 得分百分比
         type: SubjectType;
+        // 完形填空等复合题目的子题目
+        sub_subjects?: Array<{
+          description: string;
+          id: SubjectId;
+          last_updated_at: string;
+          options: Array<{
+            content: string;
+            id: OptionId;
+            type: string;
+          }>;
+          point: string;
+          type: SubjectType;
+          parent_id?: SubjectId;
+        }>;
       }>;
     } = response.data;
 
@@ -268,18 +291,38 @@ export default class {
     let response = await this.#axios.get(url).catch(() => void 0);
 
     if (!response || response.status == HttpStatusCode.NotFound) {
-      const subjects = distribute.subjects.filter(
-        (subject) => subject.type != 'text',
-      );
+      // 准备题目列表，展开 cloze 等复合题目的 sub_subjects
+      const allSubjects: Array<{
+        subject_id: SubjectId;
+        subject_updated_at: string;
+        answer_option_ids: OptionId[];
+      }> = [];
+
+      for (const subject of distribute.subjects) {
+        if (subject.type === 'text') continue;
+
+        // 如果有 sub_subjects（如 cloze），使用子题目代替主题目
+        if (subject.sub_subjects && subject.sub_subjects.length > 0) {
+          for (const subSubject of subject.sub_subjects) {
+            allSubjects.push({
+              subject_id: subSubject.id,
+              subject_updated_at: subSubject.last_updated_at,
+              answer_option_ids: [],
+            });
+          }
+        } else {
+          allSubjects.push({
+            subject_id: subject.id,
+            subject_updated_at: subject.last_updated_at,
+            answer_option_ids: [],
+          });
+        }
+      }
 
       response = await this.#axios.post(url, {
         exam_paper_instance_id: distribute.exam_paper_instance_id,
         exam_submission_id: null,
-        subjects: subjects.map((subject) => ({
-          subject_id: subject.id,
-          subject_updated_at: subject.last_updated_at,
-          answer_option_ids: [],
-        })),
+        subjects: allSubjects,
         progress: {
           answered_num: 0,
           total_subjects: distribute.subjects.length,

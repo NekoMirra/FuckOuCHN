@@ -9,7 +9,7 @@ import * as Activity from './activity.js';
 import * as Processor from './course/processor.js';
 import * as Search from './course/search.js';
 import { filterCookies, login, LoginConfig, storeCookies } from './login.js';
-import { attachDebugNetwork, errorWithRetry, input, waitForSPALoaded } from './utils.js';
+import { errorWithRetry, input, waitForSPALoaded } from './utils.js';
 import { CourseInfo } from './course/search.js';
 import { ActivityInfo } from './activity.js';
 
@@ -96,38 +96,37 @@ class IMSRunner {
   }
 
   private getLowestNDefault(desiredConcurrency: number, totalCourses: number) {
-    // 默认策略：
-    // - 如果开启了视频刷课（enableVideo），默认处理全部未完成课程
-    // - 否则只执行"进度最低的前 N 个课程"
-    // N 默认为并发度（自动并发时通常是 6 / 课程数）。可用 _LOWEST_N 覆盖。
+    // 默认策略：执行所有未完成的课程活动。
+    // 可用 _LOWEST_N 覆盖：0 或不填表示全部，正数表示限制数量。
     const raw = process.env._LOWEST_N;
-    if (raw != null && String(raw).trim() !== '') {
-      const n = Math.floor(Number(raw));
-      if (Number.isFinite(n) && n > 0) return n;
-      // _LOWEST_N=0 表示处理全部
-      if (n === 0) return totalCourses;
-    }
-    // 开启视频刷课时，默认处理全部未完成课程
-    if (Config.features.enableVideo) {
-      return totalCourses;
-    }
-    return desiredConcurrency;
+    if (raw == null || String(raw).trim() === '') return totalCourses; // 不填 = 全部
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n) || n === 0) return totalCourses; // 0 = 全部
+    if (n < 0) return totalCourses;
+    return n;
   }
 
   private pickLowestProgressCourses(all: CourseInfo[], desiredConcurrency: number) {
     const n = this.getLowestNDefault(desiredConcurrency, all.length);
-    const sorted = [...all].sort((a, b) => {
-      const pa = this.parseProgressValue(a.progress, a.type);
-      const pb = this.parseProgressValue(b.progress, b.type);
-      if (pa !== pb) return pa - pb;
-      // 同进度时按名称稳定排序，减少每次运行顺序抖动
-      const an = `${a.moduleName} ${a.syllabusName ?? ''} ${a.activityName}`;
-      const bn = `${b.moduleName} ${b.syllabusName ?? ''} ${b.activityName}`;
-      return an.localeCompare(bn, 'zh-CN');
-    });
 
-    const picked = sorted.slice(0, Math.min(Math.max(n, 1), sorted.length));
+    // 保持原始顺序（API 已经按 moduleSort + sort 排序）
+    // 只取前 n 个活动，不再按进度重新排序
+    // 这样可以保证前置活动先被处理
+    const picked = all.slice(0, Math.min(Math.max(n, 1), all.length));
     return { picked, pickedN: picked.length, totalN: all.length, n };
+  }
+
+  // 视频类活动类型列表
+  private readonly VIDEO_ACTIVITY_TYPES = new Set([
+    'online_video',
+    'lesson',
+    'lesson_replay',
+    'slide',
+  ]);
+
+  // 检查活动是否是视频类（需要顺序处理的类型）
+  private isVideoActivity(type: string): boolean {
+    return this.VIDEO_ACTIVITY_TYPES.has(type);
   }
 
   onProgress(listener: (e: RunnerProgressEvent) => void) {
@@ -209,7 +208,30 @@ class IMSRunner {
   // 主入口
   async start(page: Page) {
     this.page = page;
-    attachDebugNetwork(page);
+
+    // 补丁：包装 Page.waitForFunction，捕获 TimeoutError 并返回 false，避免单次 wait 导致整个流程失败
+    try {
+      const proto: any = Object.getPrototypeOf(page);
+      if (!proto.__waitForFunctionPatched) {
+        const orig = proto.waitForFunction;
+        proto.__waitForFunctionPatched = true;
+        proto.waitForFunction = async function (fn: any, options?: any, ...args: any[]) {
+          try {
+            return await orig.apply(this, [fn, options, ...args]);
+          } catch (e: any) {
+            const msg = String(e?.message ?? '');
+            if (msg && msg.includes('Timeout')) {
+              console.warn('⚠️ Page.waitForFunction 超时被捕获（已包裹），返回 false：', msg);
+              return false; // 以 false 表示未满足条件，但不要抛出异常
+            }
+            throw e;
+          }
+        };
+        console.log('🔧 已为 Page.waitForFunction 安装超时捕获补丁');
+      }
+    } catch (e) {
+      console.warn('⚠️ 安装 waitForFunction 补丁失败:', (e as any)?.message ?? e);
+    }
     // page.on('response', async (response) => {
     //   (await response.body()).
     //   const url = response.url();
@@ -225,6 +247,17 @@ class IMSRunner {
 
     const listItems = await Activity.getActivities();
     const selected = await this.selectCourseGroup(listItems);
+
+    // 自动导航到我的课程页，确保课程列表/SPA 状态已就绪（可解决某些页面跳转后定位问题）
+    if (selected.length > 0) {
+      try {
+        console.log(chalk.gray(`📍 自动导航到我的课程界面: ${Config.urls.userCourses()}`));
+        await page.goto(Config.urls.userCourses(), { timeout: 1000 * 60, waitUntil: 'domcontentloaded' });
+        await waitForSPALoaded(page);
+      } catch (e) {
+        console.warn(chalk.yellow('⚠️ 自动导航到我的课程界面失败，继续执行（非致命）'));
+      }
+    }
 
     for (const item of selected) {
       console.log(chalk.bold('-'.repeat(60)));
@@ -428,62 +461,27 @@ class IMSRunner {
     return num === 0 ? listItems : [listItems[num - 1]];
   }
 
-  // 执行课程组
+  // 执行课程组（支持智能串行/并行）
   private async processCourseGroup(page: Page, item: ActivityInfo) {
     try {
-      const rawCourses = await Search.getUncompletedCourses(page, item);
+      // API 已经只返回未完成的活动，无需额外过滤
+      let allCourses = await Search.getUncompletedCourses(page, item);
 
-      // exam-only：只处理考试类活动，避免为了“只答题”仍拉取/遍历其他栏目。
-      // 同时过滤掉未注册的处理器（例如被功能开关关闭），避免后续打印“⚠️ 不支持的课程类型”。
-      const examOnly = Config.features.enableExam && !Config.features.enableVideo;
-      const allCourses = rawCourses
-        .filter((course) => (examOnly ? course.type === 'exam' || course.type === 'classroom' : true))
-        .filter((course) => {
-          // 原逻辑：完成(full)的内容默认跳过，但考试仍可能需要进入以拿到分数/确认提交次数。
-          if (!examOnly && course.progress === 'full' && course.type !== 'exam') return false;
-          return true;
-        })
-        .filter((course) => !!Processor.getProcessor(course.type));
+      // 防止复选框影响 (页面可能没有 checkbox，忽略错误)
+      await page.locator('input[type="checkbox"]').setChecked(false).catch(() => void 0);
 
       const desiredConcurrency = this.resolveConcurrencyForCourses(allCourses.length);
-
-      // exam-only：KISS
-      // - 不要只取“最低 N 个”，否则会把真正的形考任务漏掉（例如先被一堆 submit_limit=0 的案例练习占坑）。
-      // - 直接处理全部考试条目，并用名称做一个简单优先级：形考任务 > 专题测验 > 其他 > 案例练习。
-      const courses = examOnly
-        ? [...allCourses].sort((a, b) => {
-          const weight = (name: string) => {
-            const s = String(name ?? '');
-            if (s.includes('形考任务')) return 0;
-            if (s.includes('专题测验')) return 1;
-            if (s.includes('案例练习')) return 9;
-            return 5;
-          };
-          const wa = weight(a.activityName);
-          const wb = weight(b.activityName);
-          if (wa !== wb) return wa - wb;
-          const pa = this.parseProgressValue(a.progress, a.type);
-          const pb = this.parseProgressValue(b.progress, b.type);
-          if (pa !== pb) return pa - pb;
-          return a.activityName.localeCompare(b.activityName, 'zh-CN');
-        })
-        : this.pickLowestProgressCourses(allCourses, desiredConcurrency).picked;
-
-      const pickedN = courses.length;
-      const totalN = allCourses.length;
+      let { picked: courses, pickedN, totalN } = this.pickLowestProgressCourses(
+        allCourses,
+        desiredConcurrency,
+      );
       const concurrency = this.resolveConcurrencyForCourses(courses.length);
 
-      if (!examOnly && totalN > 0 && pickedN > 0 && pickedN < totalN) {
+      if (totalN > 0 && pickedN > 0 && pickedN < totalN) {
         console.log(
           chalk.gray(
-            `[${item.title}] 将执行 ${pickedN} 个课程（共 ${totalN} 个候选）。` +
-            ` 可通过 _LOWEST_N 调整执行数量（设为 0 表示全部）。`,
-          ),
-        );
-      } else if (!examOnly && totalN > 0) {
-        console.log(
-          chalk.gray(
-            `[${item.title}] 将执行全部 ${totalN} 个未完成课程。`,
+            `[${item.title}] 默认只执行前 ${pickedN} 个课程（共 ${totalN} 个候选）。` +
+            ` 可通过 _LOWEST_N 调整执行数量。`,
           ),
         );
       }
@@ -506,17 +504,53 @@ class IMSRunner {
         return;
       }
 
-      if (concurrency <= 1 || courses.length <= 1) {
-        for (const [i, course] of courses.entries()) {
-          await this.processSingleCourse(page, item.title, course, i + 1, courses.length);
-        }
-      } else {
+      // 分离视频类活动和非视频类活动
+      const videoActivities = courses.filter((c) => this.isVideoActivity(c.type));
+      const nonVideoActivities = courses.filter((c) => !this.isVideoActivity(c.type));
+
+      // 1. 先串行处理视频类活动（因为有前置依赖）
+      if (videoActivities.length > 0) {
         console.log(
-          chalk.yellow(
-            `⚡ 并发模式已启用：${concurrency} 个窗口并行处理（_CONCURRENCY=${process.env._CONCURRENCY ?? '1'}）`,
+          chalk.cyan(
+            `📹 检测到 ${videoActivities.length} 个视频活动，将按顺序串行处理（避免前置依赖问题）`,
           ),
         );
-        await this.processCourseGroupConcurrently(page, item, courses, concurrency);
+
+        let processedCount = 0;
+        for (const [i, course] of videoActivities.entries()) {
+          await this.processSingleCourse(page, item.title, course, i + 1, videoActivities.length);
+          processedCount++;
+
+          // 每处理完一个视频，检查是否需要刷新活动列表以解锁后续活动
+          // 只在处理中间视频时刷新，最后一个不需要
+          if (i < videoActivities.length - 1 && (i + 1) % 3 === 0) {
+            console.log(chalk.gray('🔄 刷新活动列表以检查新解锁的活动...'));
+            allCourses = await Search.getUncompletedCourses(page, item);
+            // 更新剩余的视频活动列表（可能有新解锁的）
+            const remaining = allCourses.filter(
+              (c) => this.isVideoActivity(c.type) && !courses.slice(0, i + 1).some((done) => done.activityId === c.activityId),
+            );
+            if (remaining.length > videoActivities.length - processedCount) {
+              console.log(chalk.green(`✅ 发现 ${remaining.length - (videoActivities.length - processedCount)} 个新解锁的视频活动`));
+            }
+          }
+        }
+      }
+
+      // 2. 然后处理非视频类活动（可以并发）
+      if (nonVideoActivities.length > 0) {
+        if (concurrency <= 1 || nonVideoActivities.length <= 1) {
+          for (const [i, course] of nonVideoActivities.entries()) {
+            await this.processSingleCourse(page, item.title, course, i + 1, nonVideoActivities.length);
+          }
+        } else {
+          console.log(
+            chalk.yellow(
+              `⚡ 非视频活动并发处理：${Math.min(concurrency, nonVideoActivities.length)} 个窗口`,
+            ),
+          );
+          await this.processCourseGroupConcurrently(page, item, nonVideoActivities, concurrency);
+        }
       }
 
       await this.goBackToCourseList(page);
@@ -538,6 +572,32 @@ class IMSRunner {
         ts: Date.now(),
       });
     }
+  }
+
+  private async openCourseGroupListPage(page: Page, item: ActivityInfo) {
+    await page.goto(`${Config.urls.course()}/${item.id}/ng#/`, {
+      timeout: 1000 * 60,
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(RegExp(`^${Config.urls.course()}.*`), {
+      timeout: 1000 * 60,
+      waitUntil: 'domcontentloaded',
+    });
+
+    await waitForSPALoaded(page);
+
+    // 尽量展开全部，避免 locator 找不到（按钮显示“展开”表示当前未展开）
+    const expandBtn = page.getByText(/全部(?:收起|展开)/);
+    const expandText = ((await expandBtn.textContent().catch(() => '')) ?? '').trim();
+    if (expandText.includes('展开')) {
+      await expandBtn.click().catch(() => void 0);
+      await page.waitForLoadState('domcontentloaded');
+      await waitForSPALoaded(page);
+    }
+
+    // 关闭过滤/复选框，避免列表动态变化导致定位错乱
+    await page.locator('input[type="checkbox"]').setChecked(false).catch(() => void 0);
+    await waitForSPALoaded(page);
   }
 
   private async processCourseGroupConcurrently(
@@ -593,7 +653,13 @@ class IMSRunner {
       ),
     );
 
-    // 不再需要提前打开课程列表页，每个活动直接通过 URL 导航
+    await Promise.all(
+      workerPages.map(async (p, i) => {
+        // 给每个 worker 一个轻微错峰，减少同时请求导致的风控概率
+        await new Promise((r) => setTimeout(r, i * 400));
+        await this.openCourseGroupListPage(p, item);
+      }),
+    );
 
     let next = 0;
     await Promise.all(
@@ -661,7 +727,10 @@ class IMSRunner {
 
     const processor = Processor.getProcessor(course.type);
     if (!processor) {
-      console.warn('⚠️ 未找到处理器(可能已被功能开关关闭):', Processor.getCourseType(course.type));
+      console.warn(
+        '⚠️ 不支持的课程类型:',
+        Processor.getCourseType(course.type),
+      );
 
       this.emitProgress({
         kind: 'courseSkip',
@@ -698,66 +767,40 @@ class IMSRunner {
       return;
     }
 
-    const examOnly = Config.features.enableExam && !Config.features.enableVideo;
-    const canExecWithoutOpen = examOnly && (course.type === 'exam' || course.type === 'classroom');
+    // 直接通过 URL 导航到活动页面，避免 DOM 点击不稳定
+    const activityUrl = this.buildActivityUrl(course);
+    console.log(`${prefix}📍 导航到活动: ${activityUrl}`);
 
-    // 直接通过 URL 导航到活动页面（废弃了 DOM 点击方式）
-    if (!canExecWithoutOpen) {
-      const activityUrl = this.getActivityUrl(course);
-      console.log(chalk.gray(`${prefix}导航到活动页面...`));
-
-      try {
-        await page.goto(activityUrl, {
-          timeout: 30000,
-          waitUntil: 'domcontentloaded',
-        });
-        await waitForSPALoaded(page);
-      } catch (e) {
-        console.warn(`${prefix}⚠️ 无法打开活动页面，跳过: ${course.activityName}`);
-
-        // 页面打开失败时也检查风控状态
-        const isBlocked = await this.checkRiskStatus(page);
-        if (isBlocked) {
-          console.error(chalk.bgRed(`${prefix}❌ 检测到风控，停止执行`));
-          throw new Error('账号被风控封禁');
-        }
-
-        this.emitProgress({
-          kind: 'courseSkip',
-          groupTitle,
-          workerTag,
-          index,
-          total,
-          reason: '无法打开活动页面',
-          course: {
-            activityName: course.activityName,
-            type: course.type,
-            activityId: course.activityId,
-          },
-          ts: Date.now(),
-        });
-        return;
-      }
+    try {
+      await page.goto(activityUrl, {
+        timeout: 60000,
+        waitUntil: 'domcontentloaded',
+      });
+    } catch (e) {
+      console.warn(`${prefix}⚠️ 导航失败:`, e);
+      this.emitProgress({
+        kind: 'courseSkip',
+        groupTitle,
+        workerTag,
+        index,
+        total,
+        reason: '导航失败',
+        course: {
+          activityName: course.activityName,
+          type: course.type,
+          activityId: course.activityId,
+        },
+        ts: Date.now(),
+      });
+      return;
     }
 
     await errorWithRetry(`处理课程: ${course.activityName}`, 3)
       .retry(async () => {
-        // 重试前检查风控状态
-        const isBlocked = await this.checkRiskStatus(page);
-        if (isBlocked) {
-          console.error(chalk.bgRed(`${prefix}❌ 检测到风控，停止重试`));
-          throw new Error('账号被风控封禁');
-        }
         await page.reload({ timeout: 60000 });
       })
-      .failed(async (e) => {
+      .failed((e) => {
         console.log(`执行出错: ${e}`);
-
-        // 最终失败时也检查风控状态
-        const isBlocked = await this.checkRiskStatus(page);
-        if (isBlocked) {
-          console.error(chalk.bgRed(`${prefix}❌ 检测到风控，账号可能已被封禁`));
-        }
 
         this.emitProgress({
           kind: 'courseError',
@@ -775,13 +818,11 @@ class IMSRunner {
         });
       })
       .run(async () => {
-        if (!canExecWithoutOpen) await waitForSPALoaded(page);
+        await waitForSPALoaded(page);
         await processor.exec(page);
       });
 
-    if (!canExecWithoutOpen) {
-      await this.goBackToCourseList(page);
-    }
+    await this.goBackToCourseList(page);
 
     this.emitProgress({
       kind: 'courseDone',
@@ -798,18 +839,72 @@ class IMSRunner {
     });
   }
 
-  /**
-   * 生成活动页面的直接访问 URL
-   * 格式: /course/{courseId}/learning-activity/full-screen#/{activityId}
-   */
-  private getActivityUrl(course: CourseInfo): string {
-    return `${Config.urls.course()}/${course.courseId}/learning-activity/full-screen#/${course.activityId}`;
+  // 构建活动 URL（直接导航，避免 DOM 依赖）
+  private buildActivityUrl(course: CourseInfo): string {
+    const baseUrl = Config.urls.course();
+    // 考试使用 full-screen#/exam/{id} 格式
+    if (course.type === 'exam') {
+      return `${baseUrl}/${course.courseId}/learning-activity/full-screen#/exam/${course.activityId}`;
+    }
+    // 其他学习活动使用 learning-activity#/{id} 格式
+    return `${baseUrl}/${course.courseId}/learning-activity#/${course.activityId}`;
   }
 
-  // 返回上一级页面
-  private async goBackToCourseList(page: Page) {
-    await page.goBack({ waitUntil: 'domcontentloaded', timeout: 0 });
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 });
+  // 课程定位（保留以兼容其他可能的用途）
+  private getCourseLocator(page: Page, course: CourseInfo) {
+    let loc = page.locator(`#${course.moduleId}`);
+    if (course.syllabusId) loc = loc.locator(`#${course.syllabusId}`);
+    return loc
+      .locator(`#learning-activity-${course.activityId}`)
+      .getByText(course.activityName, { exact: true });
+  }
+
+  // 懒加载/虚拟滚动：滚动课程列表以让目标 activity 进入 DOM
+  private async ensureCourseVisibleInList(page: Page, course: CourseInfo) {
+    const activitySel = `#learning-activity-${course.activityId}`;
+
+    // 先回到顶部，避免在底部/中部导致滚动策略无效
+    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => void 0);
+
+    // 越靠后的课程越可能不在首屏；先粗略滚动到接近底部
+    const maxSteps = 10;
+    for (let step = 0; step < maxSteps; step++) {
+      if ((await page.locator(activitySel).count()) > 0) return;
+
+      await page
+        .evaluate(() => {
+          const dy = Math.max(window.innerHeight * 0.9, 900);
+          window.scrollBy(0, dy);
+        })
+        .catch(() => void 0);
+
+      // 给 SPA/渲染一点时间
+      await page.waitForTimeout(180).catch(() => void 0);
+
+      // 每隔几步尝试等待 SPA 稳定一次（避免一直在加载中）
+      if (step === 2 || step === 6) {
+        await waitForSPALoaded(page).catch(() => void 0);
+      }
+    }
+  }
+
+  // 检查锁定/未开始
+  private async isLockedOrUpcoming(t: Locator) {
+    if ((await t.getAttribute('class'))?.includes('locked')) {
+      console.log('🔒 课程锁定，跳过');
+      return true;
+    }
+    if (await t.locator('xpath=../*[contains(@class, "upcoming")]').count()) {
+      console.log('⏳ 课程未开始，跳过');
+      return true;
+    }
+    return false;
+  }
+
+  // 返回上一级页面（URL 直接导航模式下，此方法可选）
+  private async goBackToCourseList(_page: Page) {
+    // 使用 URL 直接导航后，不需要返回课程列表
+    // 保留此方法以兼容现有调用
   }
 }
 

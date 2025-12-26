@@ -28,16 +28,21 @@ class SingleSelection extends BaseSubjectResolver {
       new Set(this.wrongOptions.map(({ id }) => id)).has(opt.id) ? [] : opt,
     );
 
+    // 如果有父题目描述（如 cloze 的主题目），合并到描述中
+    const fullDescription = this.subject.parentDescription
+      ? `${this.subject.parentDescription}\n\n问题: ${this.subject.description}`
+      : this.subject.description;
+
     return {
       id: this.subject.id,
       type: this.type,
-      description: this.subject.description,
+      description: fullDescription,
       options: opts.map((o) => o.content),
     };
   }
 
   async getAnswer(): Promise<OptionId[]> {
-    const { options, description } = this.subject;
+    const { options, description, parentDescription } = this.subject;
 
     if (this.wrongOptions.length == options.length) {
       throw new Error('impossable: all options is wrong!!');
@@ -65,9 +70,14 @@ class SingleSelection extends BaseSubjectResolver {
       }
     }
 
+    // 如果有父题目描述，合并到描述中
+    const fullDescription = parentDescription
+      ? `${parentDescription}\n\n问题: ${description}`
+      : description;
+
     const answer = await this.aiModel.getResponse(
       this.type,
-      description,
+      fullDescription,
       opts.map(({ content }) => content),
     ).catch((e) => {
       console.warn(

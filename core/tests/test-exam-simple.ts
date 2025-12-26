@@ -79,12 +79,14 @@ async function main() {
     courseId: 30001870501, // 替换为实际的课程 ID
     moduleId: 'test-module',
     moduleName: '专题一 毛泽东思想及其历史地位',
+    moduleSort: 0,
     syllabusId: null,
     syllabusName: null,
     activityId: 30003642924, // 专题测验
     activityName: '专题测验',
     type: 'exam',
     progress: 'part',
+    sort: 0,
   };
 
   console.log('[4] 准备考试处理器...');

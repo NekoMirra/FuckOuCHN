@@ -16,6 +16,7 @@ export type Subject = {
   options: Option[];
   point: string; // 得分百分比
   type: SubjectType;
+  parentDescription?: string; // 父题目描述（用于 cloze 等复合题型的子题目）
 };
 
 /**

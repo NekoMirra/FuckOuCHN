@@ -374,22 +374,39 @@ class AIModel {
     description: string,
     options: string[],
   ) {
+    // 检测题目语言
+    const isEnglish = /^[a-zA-Z0-9\s,.?!;:\-()"']+/.test(description.trim());
+    
+    if (isEnglish) {
+      const questionContent = format(
+        '%s\n%s\n%s\n%s\n%s',
+        `Please answer the following ${type === '判断题' ? 'True/False question' : type === '选择题' ? 'multiple choice question' : type}:`,
+        `Question: ${description}`,
+        'Options:',
+        `${options
+          .map((option, index) => `  ${indexToLabel(index)}. ${option}`)
+          .join('\n')}`,
+        '\nReturn ONLY the letter of the correct answer (e.g., A or B).',
+      );
+      return questionContent;
+    }
+    
     const questionContent = format(
-      '%s\n%s\n%s\n%s',
-      `请回答以下${type}，并只返回正确答案的字母：`,
+      '%s\n%s\n%s\n%s\n%s',
+      `请回答以下${type}：`,
       `题目：${description}`,
       '选项：',
       `${options
-        .map((option, index) => `\t${indexToLabel(index)}. ${option}`)
+        .map((option, index) => `  ${indexToLabel(index)}. ${option}`)
         .join('\n')}`,
+      '\n请仔细阅读题目和选项，只返回正确答案的字母（如 A 或 B）。',
     );
     return questionContent;
   }
 
   private systemConstraintTemplate(type: string, options: string[]) {
-    const systemConstraint = `你将回答${type}。只返回正确答案的字母(${options
-      .map((_, i) => indexToLabel(i))
-      .join(',')})。`;
+    const validLabels = options.map((_, i) => indexToLabel(i)).join(', ');
+    const systemConstraint = `你是一个专业的答题助手。你将回答${type}。\n\n重要规则：\n1. 仔细理解题目要求\n2. 认真分析每个选项\n3. 只返回正确答案的字母（可选：${validLabels}）\n4. 不要返回任何解释、序号或其他内容\n5. 如果题目是英文，请用英文理解；如果是中文，请用中文理解\n\n示例输出格式：A（或 B、C 等）`;
     return systemConstraint;
   }
 
@@ -408,7 +425,7 @@ class AIModel {
           {
             role: 'user',
             content:
-              '可能有多个正确选项。请只返回所有正确答案的字母，用英文逗号分隔，例如：A,C 或 B,D,E。',
+              '注意：这是多选题，可能有2个或更多正确选项。\n请仔细分析每个选项，返回所有正确答案的字母，用英文逗号分隔。\n\n输出格式示例：\n- 如果A和C正确：A,C\n- 如果B、D、E正确：B,D,E\n\n只返回字母和逗号，不要有其他内容。',
           },
         ],
         model: this.#model,
@@ -420,13 +437,23 @@ class AIModel {
   }
 
   async shortAnswer(description: string) {
-    const systemConstraint =
-      '你将回答简答题。请用中文给出简洁、直接的答案（1-3 句话），不要输出多余解释或格式。';
+    // 检测题目语言，决定回答语言
+    const isEnglish = /^[a-zA-Z0-9\s,.?!;:\-()"']+$/.test(description.trim());
+    const language = isEnglish ? 'English' : '中文';
+    
+    const systemConstraint = isEnglish
+      ? 'You are answering a short answer question. Provide a concise, direct answer in English (1-3 sentences). Do not include explanations or formatting.'
+      : '你将回答简答题。请用中文给出简洁、直接的答案（1-3句话），不要输出多余解释或格式。';
+    
+    const userPrompt = isEnglish
+      ? `Question: ${description}\n\nPlease answer in English with 1-3 complete sentences. Focus on directly answering the question.`
+      : `题目：${description}\n\n请用中文简洁回答，1-3句话，直接回答问题本身。`;
+
     const content: OpenAI.Chat.ChatCompletion = await this.chatCreate(
       {
         messages: [
           { role: 'system', content: systemConstraint },
-          { role: 'user', content: `题目：${description}` },
+          { role: 'user', content: userPrompt },
         ],
         model: this.#model,
       },
@@ -472,7 +499,9 @@ class AIModel {
       // 并发执行当前批次
       const batchPromises = batch.map(async (req) => {
         try {
-          if (req.type === 'short_answer') {
+          // 文本类题型：简答、填空、完形填空、匹配、分析
+          if (req.type === 'short_answer' || req.type === 'fill_in_blank' || 
+              req.type === 'cloze' || req.type === 'matching' || req.type === 'analysis') {
             const content = await this.shortAnswer(req.description);
             const raw = content?.choices?.[0]?.message?.content?.trim() ?? '';
             const text = raw.replace(/^\s*(答案：|答案:|答案)\s*/i, '').trim();
@@ -543,18 +572,24 @@ class AIModel {
           }
         } catch (e) {
           console.warn(chalk.yellow(`  [AI批量] 请求 ${req.id} 失败:`, String(e)));
-          // 返回默认值
-          if (req.type === 'short_answer') {
+          // 返回默认值 - 文本类题型返回文本，选择类题型返回索引
+          const textTypes = ['short_answer', 'fill_in_blank', 'cloze', 'matching', 'analysis'];
+          if (textTypes.includes(req.type)) {
             return { id: req.id, result: { text: '无法获取答案' } };
           }
           return { id: req.id, result: { indices: [0] } };
         }
       });
 
-      const batchResults = await Promise.all(batchPromises);
+      const batchResults = await Promise.allSettled(batchPromises);
 
-      for (const { id, result } of batchResults) {
-        results.set(id, result);
+      for (const promiseResult of batchResults) {
+        if (promiseResult.status === 'fulfilled') {
+          const { id, result } = promiseResult.value;
+          results.set(id, result);
+        } else {
+          console.error(chalk.red(`  [AI批量] 请求失败: ${promiseResult.reason}`));
+        }
       }
 
       // 批次间等待，避免超 QPS（除最后一批）

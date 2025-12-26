@@ -15,8 +15,28 @@ export default class ForumProc implements Processor {
   async exec(page: Page) {
     // 直接复制别人的...
     const topic = page.locator('.forum-topic-detail').first();
-    const title = await topic.locator('.topic-title').textContent();
-    const content = await topic.locator('.topic-content').textContent();
+
+    // 等待论坛话题加载
+    try {
+      await topic.waitFor({ state: 'visible', timeout: 15000 });
+    } catch {
+      console.warn('ForumProc: forum-topic-detail not found, skipping');
+      return;
+    }
+
+    const titleLocator = topic.locator('.topic-title');
+    const contentLocator = topic.locator('.topic-content');
+
+    // 等待标题和内容元素
+    try {
+      await titleLocator.waitFor({ state: 'visible', timeout: 10000 });
+    } catch {
+      console.warn('ForumProc: topic-title not found, skipping');
+      return;
+    }
+
+    const title = await titleLocator.textContent();
+    const content = await contentLocator.textContent();
 
     const publishBtn = page.getByText('发表帖子');
     await publishBtn.click();

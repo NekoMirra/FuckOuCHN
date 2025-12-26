@@ -103,23 +103,34 @@ function isProcessor(obj: any): obj is Processor {
 
 // 视频类处理器名称列表
 const VIDEO_PROCESSORS: CourseType[] = ['online_video', 'lesson', 'lesson_replay', 'slide'];
-// 答题类处理器名称列表
-const EXAM_PROCESSORS: CourseType[] = ['exam', 'classroom'];
-// 其他类处理器（页面、讨论、资料等）
-const OTHER_PROCESSORS: CourseType[] = ['page', 'material', 'forum', 'web_link', 'tencent_meeting', 'homework'];
 
-// 判断处理器是否应该启用
+// 判断处理器是否应该启用（细粒度控制）
 function shouldEnableProcessor(name: CourseType): boolean {
+  // 视频类
   if (VIDEO_PROCESSORS.includes(name)) {
     return Config.features.enableVideo;
   }
-  if (EXAM_PROCESSORS.includes(name)) {
-    return Config.features.enableExam;
+
+  // 测试类 - 独立控制
+  switch (name) {
+    case 'exam':
+      return Config.features.enableExam;
+    case 'classroom':
+      return Config.features.enableClassroom;
+    case 'page':
+      return Config.features.enablePage;
+    case 'material':
+      return Config.features.enableMaterial;
+    case 'forum':
+      return Config.features.enableForum;
+    case 'web_link':
+      return Config.features.enableWebLink;
+    case 'homework':
+      return Config.features.enableHomework;
+    case 'tencent_meeting':
+      return Config.features.enableTencentMeeting;
   }
-  if (OTHER_PROCESSORS.includes(name)) {
-    // 其他处理器：只有当视频开启时才启用（因为它们通常是刷课的一部分）
-    return Config.features.enableVideo;
-  }
+
   // 未分类的处理器默认启用
   return true;
 }

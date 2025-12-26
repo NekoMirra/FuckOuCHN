@@ -20,7 +20,17 @@ const parseEnvBool = (val: string | undefined, defaultVal: boolean): boolean => 
   return v === '1' || v === 'true' || v === 'yes';
 };
 
-const { _ENABLE_VIDEO, _ENABLE_EXAM } = process.env;
+const {
+  _ENABLE_VIDEO,
+  _ENABLE_EXAM,
+  _ENABLE_PAGE,
+  _ENABLE_MATERIAL,
+  _ENABLE_FORUM,
+  _ENABLE_WEBLINK,
+  _ENABLE_CLASSROOM,
+  _ENABLE_HOMEWORK,
+  _ENABLE_TENCENT_MEETING,
+} = process.env;
 
 const Config = {
   user: {
@@ -32,14 +42,28 @@ const Config = {
     user: () => `${API_BASE_URL}/user`,
     course: () => `${API_BASE_URL}/course`,
     home: () => `${Config.urls.user()}/index#/`,
+    userCourses: () => `${API_BASE_URL}/user/courses#/`,
     // modules: (courseId: string) => `https://lms.ouchn/api/courses/${courseId}/modules`,
+
   },
   proxy: host && port ? { host: host!, port: Number(port) } : void 0,
   ai: { api, key, model, qps },
-  // 功能开关
+  // 功能开关（细粒度控制）
   features: {
-    enableVideo: parseEnvBool(_ENABLE_VIDEO, true), // 默认开启视频刷课
-    enableExam: parseEnvBool(_ENABLE_EXAM, true),   // 默认开启答题
+    // 视频类
+    enableVideo: parseEnvBool(_ENABLE_VIDEO, true),        // 默认开启：在线视频、录播、微课等
+    // 测试类
+    enableExam: parseEnvBool(_ENABLE_EXAM, true),          // 默认开启：考试
+    enableClassroom: parseEnvBool(_ENABLE_CLASSROOM, true), // 默认开启：随堂测试
+    // 其他活动
+    enablePage: parseEnvBool(_ENABLE_PAGE, true),          // 默认开启：页面
+    enableMaterial: parseEnvBool(_ENABLE_MATERIAL, true),  // 默认开启：参考资料
+    enableForum: parseEnvBool(_ENABLE_FORUM, true),        // 默认开启：讨论
+    enableWebLink: parseEnvBool(_ENABLE_WEBLINK, true),    // 默认开启：线上链接
+    enableHomework: parseEnvBool(_ENABLE_HOMEWORK, true),  // 默认开启：作业
+    enableTencentMeeting: parseEnvBool(_ENABLE_TENCENT_MEETING, true), // 默认开启：腾讯会议
+    // 完成度确认（若开启，则在本地检测后会等待后端确认活动已完成）
+    strictCompletionCheck: parseEnvBool(process.env._STRICT_COMPLETION_CHECK, false),
   },
 
   browser: {
@@ -58,8 +82,15 @@ const Config = {
 
 function printConfigStatus() {
   console.log('\n========== 功能开关 ==========');
-  console.log('视频刷课:', Config.features.enableVideo ? '✅ 开启' : '❌ 关闭');
-  console.log('自动答题:', Config.features.enableExam ? '✅ 开启' : '❌ 关闭');
+  console.log('📹 视频刷课 (online_video/lesson/lesson_replay/slide):', Config.features.enableVideo ? '✅ 开启' : '❌ 关闭');
+  console.log('📝 考试答题 (exam):', Config.features.enableExam ? '✅ 开启' : '❌ 关闭');
+  console.log('📝 随堂测试 (classroom):', Config.features.enableClassroom ? '✅ 开启' : '❌ 关闭');
+  console.log('📄 页面浏览 (page):', Config.features.enablePage ? '✅ 开启' : '❌ 关闭');
+  console.log('📚 参考资料 (material):', Config.features.enableMaterial ? '✅ 开启' : '❌ 关闭');
+  console.log('💬 讨论论坛 (forum):', Config.features.enableForum ? '✅ 开启' : '❌ 关闭');
+  console.log('🔗 线上链接 (web_link):', Config.features.enableWebLink ? '✅ 开启' : '❌ 关闭');
+  console.log('📋 作业提交 (homework):', Config.features.enableHomework ? '✅ 开启' : '❌ 关闭');
+  console.log('🎥 腾讯会议 (tencent_meeting):', Config.features.enableTencentMeeting ? '✅ 开启' : '❌ 关闭');
   console.log('================================\n');
   console.log('视频倍速:', Config.playRate);
   console.log('考试分数及格线(百分比):', Config.totalPoints);

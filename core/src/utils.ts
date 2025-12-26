@@ -65,14 +65,42 @@ function attachDebugNetwork(page: Page) {
  * @param page 当前页面
  *
  */
-async function waitForSPALoaded(page: Page) {
+async function safeWaitForFunction(page: Page, fn: any, options?: { timeout?: number, polling?: number }): Promise<boolean> {
+  try {
+    await page.waitForFunction(fn, options ?? { timeout: 30000 });
+    return true;
+  } catch (e) {
+    // 只处理 TimeoutError，不抛出；其他错误仍然上报
+    const msg = (e as any)?.message ?? String(e);
+    if (msg && msg.includes('Timeout')) {
+      console.warn('⚠️ safeWaitForFunction 超时：', msg);
+      return false;
+    }
+    console.error('❌ safeWaitForFunction 错误：', msg);
+    return false;
+  }
+}
+
+async function waitForSPALoaded(page: Page, timeoutMs = 30000) {
   await page.waitForLoadState();
   await page.waitForTimeout(500);
-  await page.waitForFunction(() => {
-    const progressBar: HTMLElement | null =
-      document.querySelector('#ngProgress');
-    return progressBar && progressBar.style.width === '0%'; // 判断进度是否完成
-  });
+
+  const ok = await safeWaitForFunction(
+    page,
+    () => {
+      const progressBar: HTMLElement | null = document.querySelector('#ngProgress');
+      return progressBar && progressBar.style.width === '0%'; // 判断进度是否完成
+    },
+    { timeout: timeoutMs },
+  );
+
+  if (!ok) {
+    // 如果等待超时或检测失败，记录警告但不抛出，避免因某些页面使用不同加载指示器而中断流程
+    console.warn('⚠️ waitForSPALoaded 超时（或检测失败），将继续执行。');
+    // 作为降级策略，短暂等待并尝试检测常见播放器或内容节点
+    await page.waitForTimeout(500);
+  }
+
   await page.waitForTimeout(500);
 }
 

@@ -86,11 +86,11 @@ export default class ExamProc implements Processor {
     }
 
     for (let retry = 0; q && retry <= this.maxRetries; retry++) {
-      const { questions, examPaperInstanceId, subjects, total } = q;
+      const { questions, examPaperInstanceId, subjects, originalSubjects, total } = q;
 
       const submissionId = await exam.submissionsStorage({
         exam_paper_instance_id: examPaperInstanceId,
-        subjects,
+        subjects: originalSubjects, // 使用原始 subjects
       });
 
       if (!submissionId) {
@@ -228,7 +228,7 @@ export default class ExamProc implements Processor {
         // 也有可能是请求头缺少某些字段,导致验证失败
         if (
           e instanceof AxiosError &&
-          e.response!.status === HttpStatusCode.TooManyRequests
+          e.response?.status === HttpStatusCode.TooManyRequests
         ) {
           console.log('太多请求, 等待10s');
           await sleep(10000);
@@ -238,8 +238,7 @@ export default class ExamProc implements Processor {
 
         if (
           e instanceof AxiosError &&
-          e.response &&
-          e.response.status === HttpStatusCode.BadRequest
+          e.response?.status === HttpStatusCode.BadRequest
         ) {
           // 400 多数是参数/状态不对（例如 cookie/header 校验失败、试卷实例失效等），继续等一般无意义。
           // 打印有限诊断信息，帮助定位（注意：不输出 Cookie 等敏感信息）。
@@ -347,26 +346,65 @@ export default class ExamProc implements Processor {
     // 确实还不知道, 要不要重新获取问题, 有可能不重新获取亦可以? 可以复用?
     const getDistribute = await exam.getDistribute();
 
-    const subjects = await Promise.all(
-      getDistribute.subjects.map(async (subject) => {
-        const options: (typeof subject)['options'] = [];
+    // 防御性检查：有些考试接口可能返回非数组的 subjects（例如 null 或对象），此时跳过考试并打印诊断信息
+    if (!getDistribute || !Array.isArray(getDistribute.subjects)) {
+      console.warn('⚠️ getDistribute.subjects 不是数组，跳过该考试。响应片段：', JSON.stringify(getDistribute).slice(0, 1000));
+      return null;
+    }
 
-        for (const opt of subject.options) {
-          options.push({
-            ...opt,
-            content: await parseDOMText(page, opt.content),
+    // 处理题目，同时展开 cloze 等复合题目的 sub_subjects
+    const processedSubjects: Array<Awaited<ReturnType<typeof exam.getDistribute>>['subjects'][0] & {
+      parentDescription?: string;
+    }> = [];
+    
+    for (const subject of getDistribute.subjects) {
+      const options: (typeof subject)['options'] = [];
+      for (const opt of subject.options ?? []) {
+        options.push({
+          ...opt,
+          content: await parseDOMText(page, opt.content),
+        });
+      }
+      
+      const parsedDescription = await parseDOMText(page, subject.description ?? '');
+      
+      // 如果是 cloze 类型且有 sub_subjects，展开子题目
+      if (subject.type === 'cloze' && Array.isArray(subject.sub_subjects) && subject.sub_subjects.length > 0) {
+        // 保留主题目作为描述用（type='text' 形式）
+        processedSubjects.push({
+          ...subject,
+          description: parsedDescription,
+          options,
+          type: 'text' as const, // 把主题目当作描述文本
+        });
+        
+        // 展开 sub_subjects
+        for (const subSubject of subject.sub_subjects) {
+          const subOptions: typeof options = [];
+          for (const opt of subSubject.options ?? []) {
+            subOptions.push({
+              ...opt,
+              content: await parseDOMText(page, opt.content),
+            });
+          }
+          
+          processedSubjects.push({
+            ...subSubject,
+            description: await parseDOMText(page, subSubject.description ?? ''),
+            options: subOptions,
+            parentDescription: parsedDescription, // 保存父题目描述用于 AI 理解上下文
           });
         }
-
-        return {
+      } else {
+        processedSubjects.push({
           ...subject,
-          description: await parseDOMText(page, subject.description),
+          description: parsedDescription,
           options,
-        };
-      }),
-    );
+        });
+      }
+    }
 
-    const srl = await this.createSubjectResolverList(subjects, aiModel);
+    const srl = await this.createSubjectResolverList(processedSubjects, aiModel);
 
     for (const id in srl) {
       if (!subjectResolverList[id]) {
@@ -384,10 +422,11 @@ export default class ExamProc implements Processor {
     }
 
     return {
-      questions: subjects.filter(({ type }) => type != 'text'),
+      questions: processedSubjects.filter(({ type }) => type != 'text'),
       examPaperInstanceId: getDistribute.exam_paper_instance_id,
-      subjects,
-      total: subjects.length,
+      subjects: processedSubjects,
+      originalSubjects: getDistribute.subjects, // 保留原始 subjects 用于 submissionsStorage
+      total: getDistribute.subjects.length, // 使用原始 subjects 的长度
     };
   }
 

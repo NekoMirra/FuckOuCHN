@@ -96,6 +96,18 @@ export default class Material implements Processor {
         // 如果还是关不掉，按 ESC
         await page.keyboard.press('Escape').catch(() => { });
         await page.waitForTimeout(500);
+
+        // 如果弹窗仍然存在，强制重载页面
+        const isStillOpen = await page.locator('#file-previewer').isVisible().catch(() => false);
+        if (isStillOpen) {
+          console.warn(`  🔄 弹窗无法关闭，强制重载页面...`);
+          await page.reload({ timeout: 120000 }).catch(() => {
+            console.error(`  ❌ 页面重载失败`);
+          });
+          await page.waitForTimeout(2000);
+          // 重载后跳出循环，避免继续处理可能导致的错误
+          break;
+        }
       }
     }
   }

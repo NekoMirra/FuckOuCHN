@@ -15,12 +15,14 @@ test('测试考试答题', async ({ page }) => {
     courseId: 0, // 替换为实际的课程 ID
     moduleId: '??',
     moduleName: '??',
+    moduleSort: 0,
     syllabusId: null,
     syllabusName: null,
     activityId: 60000502885,
     activityName: '??',
     type: 'exam',
     progress: 'part',
+    sort: 0,
   });
   await exam.exec(page);
 });

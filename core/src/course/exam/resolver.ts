@@ -5,6 +5,10 @@ import MultipleSelection from './MultipleSelection.js';
 import SingleSelection from './SingleSelection.js';
 import ShortAnswer from './ShortAnswer.js';
 import TrueOrFalse from './TrueOrFalse.js';
+import FillInBlank from './FillInBlank.js';
+import Cloze from './Cloze.js';
+import Matching from './Matching.js';
+import Analysis from './Analysis.js';
 
 export const s2s: Record<SubjectType, string> = {
   random: '随机题目',
@@ -13,6 +17,10 @@ export const s2s: Record<SubjectType, string> = {
   single_selection: '单选题',
   multiple_selection: '多选题',
   short_answer: '简答题',
+  fill_in_blank: '填空题',
+  cloze: '完形填空',
+  matching: '匹配题',
+  analysis: '分析题',
 };
 
 const table: Partial<
@@ -25,6 +33,10 @@ const table: Partial<
   true_or_false: TrueOrFalse,
   multiple_selection: MultipleSelection,
   short_answer: ShortAnswer,
+  fill_in_blank: FillInBlank,
+  cloze: Cloze,
+  matching: Matching,
+  analysis: Analysis,
 };
 
 export function hasResolver(type: SubjectType) {
