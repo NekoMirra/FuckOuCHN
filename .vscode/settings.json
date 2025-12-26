@@ -2,9 +2,10 @@
   "search.useIgnoreFiles": true,
   "search.useGlobalIgnoreFiles": false,
   "search.useParentIgnoreFiles": false,
-  "github.copilot.chat.codeGeneration.useInstructionFiles": true
-,
-    "chrome-devtools-mcp-relay.autoConnect": true,
-    "chrome-devtools-mcp-relay.additionalMCPServerArguments": [],
-    "chat.toolSets": ["./user-toolsets.json"]
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "chrome-devtools-mcp-relay.autoConnect": true,
+  "chrome-devtools-mcp-relay.additionalMCPServerArguments": [],
+  "chat.toolSets": [
+    "./user-toolsets.json"
+  ]
 }

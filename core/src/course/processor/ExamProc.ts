@@ -356,7 +356,7 @@ export default class ExamProc implements Processor {
     const processedSubjects: Array<Awaited<ReturnType<typeof exam.getDistribute>>['subjects'][0] & {
       parentDescription?: string;
     }> = [];
-    
+
     for (const subject of getDistribute.subjects) {
       const options: (typeof subject)['options'] = [];
       for (const opt of subject.options ?? []) {
@@ -365,9 +365,9 @@ export default class ExamProc implements Processor {
           content: await parseDOMText(page, opt.content),
         });
       }
-      
+
       const parsedDescription = await parseDOMText(page, subject.description ?? '');
-      
+
       // 如果是 cloze 类型且有 sub_subjects，展开子题目
       if (subject.type === 'cloze' && Array.isArray(subject.sub_subjects) && subject.sub_subjects.length > 0) {
         // 保留主题目作为描述用（type='text' 形式）
@@ -377,7 +377,7 @@ export default class ExamProc implements Processor {
           options,
           type: 'text' as const, // 把主题目当作描述文本
         });
-        
+
         // 展开 sub_subjects
         for (const subSubject of subject.sub_subjects) {
           const subOptions: typeof options = [];
@@ -387,7 +387,7 @@ export default class ExamProc implements Processor {
               content: await parseDOMText(page, opt.content),
             });
           }
-          
+
           processedSubjects.push({
             ...subSubject,
             description: await parseDOMText(page, subSubject.description ?? ''),

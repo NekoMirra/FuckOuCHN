@@ -9,14 +9,14 @@ export default class PageProc implements Processor {
 
   async exec(page: Page) {
     await page.waitForTimeout(200);
-    
+
     // 先尝试检测视频，不依赖full-screen-mode-content
     const hasVideo = await this.detectAndPlayVideo(page);
     if (hasVideo) {
       console.log('📺 页面包含视频，已按倍速播放完成');
       return;
     }
-    
+
     // 没有视频，尝试按PDF/阅读逻辑处理
     const rightScreen = page.locator('div.full-screen-mode-content');
 
