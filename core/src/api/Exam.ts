@@ -59,43 +59,43 @@ export default class {
   }
 
   /**
-   * 获取课程概述
-   *
-   * @param forAllSubjects 是否获取所有课程?
-   *
-   * @return
-   * ```json
-   * {
-   *     "subjects": [
-   *         {
-   *             "has_audio": false,
-   *             "id": 60022713245,
-   *             "point": "25.0",
-   *             "sub_subjects": [] // 如果type是random 那么这里是随机题目的类型
-   *             "type": "true_or_false"
-   *         },
-   *         {
-   *              "has_audio": false,
-   *              "id": 60020719291,
-   *              "point": "4.0",
-   *              "sub_subjects": [
-   *                  {
-   *                      "point": "4.0",
-   *                      "type": "single_selection"
-   *                  },
-   *                  {
-   *                      "point": "4.0",
-   *                      "type": "single_selection"
-   *                  },
-   *                  ...
-   *              ],
-   *              "type": "random"
-   *          },
-   *         ...
-   *     ]
-   * }
-   * ```
-   * */
+    * 获取课程概述
+    *
+    * @param forAllSubjects 是否获取所有课程?
+    *
+    * @return
+    * ```json
+    * {
+    *     "subjects": [
+    *         {
+    *             "has_audio": false,
+    *             "id": 60022713245,
+    *             "point": "25.0",
+    *             "sub_subjects": [] // 如果type是random 那么这里是随机题目的类型
+    *             "type": "true_or_false"
+    *         },
+    *         {
+    *              "has_audio": false,
+    *              "id": 60020719291,
+    *              "point": "4.0",
+    *              "sub_subjects": [
+    *                  {
+    *                      "point": "4.0",
+    *                      "type": "single_selection"
+    *                  },
+    *                  {
+    *                      "point": "4.0",
+    *                      "type": "single_selection"
+    *                  },
+    *                  ...
+    *              ],
+    *              "type": "random"
+    *          },
+    *         ...
+    *     ]
+    * }
+    * ```
+    * */
   async getSubjectsSummary(forAllSubjects: boolean) {
     const response = await this.#axios.get('subjects-summary', {
       params: { forAllSubjects },
@@ -115,28 +115,28 @@ export default class {
   }
 
   /**
-   * 获取所有提交记录
-   *
-   * @return
-   * ```json
-   * {
-   *  "exam_final_score": null,
-   *  "exam_score": 100.0, // 当前最高的得分
-   *  "exam_score_rule": "highest",
-   *  "submissions": [
-   *      {
-   *          "created_at": "2024-10-17T12:12:18Z",
-   *          "exam_id": 60000512656,
-   *          "exam_type_text": "测试试题",
-   *          "id": 60092024720,
-   *          "score": "100.0",
-   *          "submitted_at": "2024-10-17T12:13:29Z"
-   *      }
-   *      ...
-   *  ]
-   * }
-   * ```
-   */
+    * 获取所有提交记录
+    *
+    * @return
+    * ```json
+    * {
+    *  "exam_final_score": null,
+    *  "exam_score": 100.0, // 当前最高的得分
+    *  "exam_score_rule": "highest",
+    *  "submissions": [
+    *      {
+    *          "created_at": "2024-10-17T12:12:18Z",
+    *          "exam_id": 60000512656,
+    *          "exam_type_text": "测试试题",
+    *          "id": 60092024720,
+    *          "score": "100.0",
+    *          "submitted_at": "2024-10-17T12:13:29Z"
+    *      }
+    *      ...
+    *  ]
+    * }
+    * ```
+    */
   async getSubmissions() {
     const response = await this.#axios
       .get('submissions')
@@ -165,9 +165,9 @@ export default class {
   }
 
   /**
-   * 获取指定考试记录信息
-   * @param id 考试记录id
-   */
+    * 获取指定考试记录信息
+    * @param id 考试记录id
+    */
   async getSubmission(id: SubjectId) {
     const response = await this.#axios.get(`submissions/${id}`);
     const submission: {
@@ -202,41 +202,41 @@ export default class {
   }
 
   /**
-   * 获取题目描述
-   * 不能重复获取, 一次考试获取一次
-   * 只要一次验证错误这个就废了
-   *
-   * @return
-   * ```json
-   * {
-   *  "exam_paper_instance_id": 60091054740,
-   *  "subjects": [
-   *    {
-   *      "description": "<p>一、单项选择题<\p>",
-   *      "id": 60022713235,
-   *      "options": [],
-   *      "point": "0.0",
-   *      "type": "text"
-   *    },
-   *    {
-   *      ...,
-   *      "options": [
-   *        {
-   *          "content": "<p>社会主义核心价值观<p>"
-   *          "id": 60060738293,
-   *          "type": "text"
-   *        },
-   *        ...
-   *      ],
-   *      "point": "25.0",
-   *      "type": "single_selection"
-   *      ]
-   *    },
-   *    ...
-   *  ]
-   * }
-   * ```
-   */
+    * 获取题目描述
+    * 不能重复获取, 一次考试获取一次
+    * 只要一次验证错误这个就废了
+    *
+    * @return
+    * ```json
+    * {
+    *  "exam_paper_instance_id": 60091054740,
+    *  "subjects": [
+    *    {
+    *      "description": "<p>一、单项选择题<\p>",
+    *      "id": 60022713235,
+    *      "options": [],
+    *      "point": "0.0",
+    *      "type": "text"
+    *    },
+    *    {
+    *      ...,
+    *      "options": [
+    *        {
+    *          "content": "<p>社会主义核心价值观<p>"
+    *          "id": 60060738293,
+    *          "type": "text"
+    *        },
+    *        ...
+    *      ],
+    *      "point": "25.0",
+    *      "type": "single_selection"
+    *      ]
+    *    },
+    *    ...
+    *  ]
+    * }
+    * ```
+    */
   async getDistribute() {
     const response = await this.#axios.get('distribute');
 
@@ -276,71 +276,83 @@ export default class {
   }
 
   /**
-   * 提交存储, 当开始答题需要调用, 消耗一次答题机会
-   * 只是相当于标记已经开始答题
-   * 只要一次验证错误这个就废了
-   *
-   * @see getDistribute
-   *
-   * @return 当你提交答案时需要带上 id
-   */
+    * 提交存储, 当开始答题需要调用, 消耗一次答题机会
+    * 只是相当于标记已经开始答题
+    * 只要一次验证错误这个就废了
+    *
+    * @see getDistribute
+    *
+    * @return 返回 { submissionId, expandedSubjects } 其中 expandedSubjects 包含了展开后的所有题目ID
+    */
   async submissionsStorage(
     distribute: Awaited<ReturnType<typeof this.getDistribute>>,
-  ): Promise<number | undefined> {
+  ): Promise<{
+    submissionId: number | undefined;
+    expandedSubjects: Array<{
+      subject_id: SubjectId;
+      subject_updated_at: string;
+      answer_option_ids: OptionId[];
+    }>;
+  }> {
     const url = 'submissions/storage';
     let response = await this.#axios.get(url).catch(() => void 0);
 
-    if (!response || response.status == HttpStatusCode.NotFound) {
-      // 准备题目列表，展开 cloze 等复合题目的 sub_subjects
-      const allSubjects: Array<{
-        subject_id: SubjectId;
-        subject_updated_at: string;
-        answer_option_ids: OptionId[];
-      }> = [];
+    // 准备题目列表，展开 cloze 等复合题目的 sub_subjects
+    const expandedSubjects: Array<{
+      subject_id: SubjectId;
+      subject_updated_at: string;
+      answer_option_ids: OptionId[];
+    }> = [];
 
-      for (const subject of distribute.subjects) {
-        if (subject.type === 'text') continue;
+    for (const subject of distribute.subjects) {
+      if (subject.type === 'text') continue;
 
-        // 如果有 sub_subjects（如 cloze），使用子题目代替主题目
-        if (subject.sub_subjects && subject.sub_subjects.length > 0) {
-          for (const subSubject of subject.sub_subjects) {
-            allSubjects.push({
-              subject_id: subSubject.id,
-              subject_updated_at: subSubject.last_updated_at,
-              answer_option_ids: [],
-            });
-          }
-        } else {
-          allSubjects.push({
-            subject_id: subject.id,
-            subject_updated_at: subject.last_updated_at,
+      // 如果有 sub_subjects（如 cloze），使用子题目代替主题目
+      if (subject.sub_subjects && subject.sub_subjects.length > 0) {
+        for (const subSubject of subject.sub_subjects) {
+          if (!subSubject.id || subSubject.id <= 0) continue; // 过滤无效ID
+          expandedSubjects.push({
+            subject_id: subSubject.id,
+            subject_updated_at: subSubject.last_updated_at,
             answer_option_ids: [],
           });
         }
+      } else {
+        if (!subject.id || subject.id <= 0) continue; // 过滤无效ID
+        expandedSubjects.push({
+          subject_id: subject.id,
+          subject_updated_at: subject.last_updated_at,
+          answer_option_ids: [],
+        });
       }
+    }
 
+    if (!response || response.status == HttpStatusCode.NotFound) {
       response = await this.#axios.post(url, {
         exam_paper_instance_id: distribute.exam_paper_instance_id,
         exam_submission_id: null,
-        subjects: allSubjects,
+        subjects: expandedSubjects,
         progress: {
           answered_num: 0,
-          total_subjects: distribute.subjects.length,
+          total_subjects: expandedSubjects.length, // 使用展开后的实际题目数量
         },
       });
     }
 
-    return response?.data['id'];
+    return {
+      submissionId: response?.data['id'],
+      expandedSubjects,
+    };
   }
 
   /**
-   * 提交答案, 不能频繁提交
-   *
-   * @param examPaperInstanceId 同 submissionStorage
-   * @param examSubmissionId submissionStorage返回值
-   * @param subjects 答案数组
-   * @param totalSubjects 同 submissionStorage
-   */
+    * 提交答案, 不能频繁提交
+    *
+    * @param examPaperInstanceId 同 submissionStorage
+    * @param examSubmissionId submissionStorage返回值
+    * @param subjects 答案数组
+    * @param totalSubjects 同 submissionStorage
+    */
   async postSubmissions(
     examPaperInstanceId: number,
     examSubmissionId: number,

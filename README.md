@@ -15,13 +15,9 @@
 
 ## 📦 快速开始
 
-### 方式一：下载可执行文件（推荐）
 
-直接下载打包好的程序，无需安装任何依赖：
 
-👉 [下载 FuckOuCHN.exe](https://github.com/NekoMirra/FuckOuCHN/releases/latest)
-
-### 方式二：从源码运行
+### 从源码运行
 
 #### 1. 环境准备
 

@@ -26,7 +26,7 @@ export default class ExamProc implements Processor {
   #totalScore: number = -1;
 
   // config
-  private maxRetries = Config.examMaxRetries;
+  private maxRetries = 0; // Config.examMaxRetries;
 
   async condition(info: CourseInfo) {
     this.#courseInfo = info;
@@ -86,12 +86,12 @@ export default class ExamProc implements Processor {
     }
 
     for (let retry = 0; q && retry <= this.maxRetries; retry++) {
-      const { questions, examPaperInstanceId, subjects, originalSubjects, total } = q;
+      const { questions, examPaperInstanceId, examDistribute, total } = q;
 
-      const submissionId = await exam.submissionsStorage({
-        exam_paper_instance_id: examPaperInstanceId,
-        subjects: originalSubjects, // 使用原始 subjects
-      });
+      // 调用新的 submissionsStorage，获取 submissionId 和展开后的题目列表
+      const { submissionId, expandedSubjects } = await exam.submissionsStorage(
+        examDistribute,
+      );
 
       if (!submissionId) {
         console.log('意料之外的错误:', "can't get submissionId");
@@ -154,6 +154,38 @@ export default class ExamProc implements Processor {
         }),
       );
 
+      // 验证所有 subjectId 的有效性
+      const validAnswerSubjects = answerSubjects.filter(s => {
+        if (!s.subjectId || typeof s.subjectId !== 'number' || s.subjectId <= 0) {
+          console.warn(`⚠️ 跳过无效的题目ID: ${s.subjectId}, type: ${typeof s.subjectId}`);
+          return false;
+        }
+        return true;
+      });
+
+      // 检查是否有重复的 subjectId（应该不存在，但作为防御性检查）
+      const seenIds = new Set<SubjectId>();
+      const uniqueAnswerSubjects = validAnswerSubjects.filter(s => {
+        if (seenIds.has(s.subjectId)) {
+          console.warn(`⚠️ 发现重复的题目ID: ${s.subjectId}，将跳过该重复项`);
+          return false;
+        }
+        seenIds.add(s.subjectId);
+        return true;
+      });
+
+      console.log('提交subjects ids:', uniqueAnswerSubjects.map(s => s.subjectId));
+      console.log('totalSubjects:', total, 'subjects.length:', uniqueAnswerSubjects.length);
+      
+      // 诊断：打印完整的答案信息用于调试
+      if (uniqueAnswerSubjects.length !== total) {
+        console.warn(`⚠️ 警告：提交的题目数量 (${uniqueAnswerSubjects.length}) 不等于总题目数 (${total})`);
+        console.warn('✏️ 完整答案信息:');
+        uniqueAnswerSubjects.forEach((ans, idx) => {
+          console.warn(`  [${idx}] ID: ${ans.subjectId}, 选项: ${ans.answerOptionIds.join(',') || '(空)'}, 文本: ${ans.answerText ? ans.answerText.substring(0, 30) : '(无)'}`);
+        });
+      }
+
       const waitTime = total * 200 + Math.random() * 5 * 100;
       console.log((waitTime / 1000).toFixed(2), '秒后提交');
 
@@ -163,7 +195,7 @@ export default class ExamProc implements Processor {
         exam,
         examPaperInstanceId,
         submissionId,
-        answerSubjects,
+        uniqueAnswerSubjects,
         total,
       );
 
@@ -368,8 +400,8 @@ export default class ExamProc implements Processor {
 
       const parsedDescription = await parseDOMText(page, subject.description ?? '');
 
-      // 如果是 cloze 类型且有 sub_subjects，展开子题目
-      if (subject.type === 'cloze' && Array.isArray(subject.sub_subjects) && subject.sub_subjects.length > 0) {
+      // 如果是 cloze 或 random 类型且有 sub_subjects，展开子题目
+      if ((subject.type === 'cloze' || subject.type === 'random') && Array.isArray(subject.sub_subjects) && subject.sub_subjects.length > 0) {
         // 保留主题目作为描述用（type='text' 形式）
         processedSubjects.push({
           ...subject,
@@ -380,6 +412,8 @@ export default class ExamProc implements Processor {
 
         // 展开 sub_subjects
         for (const subSubject of subject.sub_subjects) {
+          if (!subSubject.id || subSubject.id <= 0) continue; // 过滤无效ID
+
           const subOptions: typeof options = [];
           for (const opt of subSubject.options ?? []) {
             subOptions.push({
@@ -396,6 +430,8 @@ export default class ExamProc implements Processor {
           });
         }
       } else {
+        if (!subject.id || subject.id <= 0) continue; // 过滤无效ID
+
         processedSubjects.push({
           ...subject,
           description: parsedDescription,
@@ -421,12 +457,15 @@ export default class ExamProc implements Processor {
       }
     }
 
+    // 计算实际需要提交的题目数量（排除 text 类型）
+    const actualQuestionsCount = processedSubjects.filter(({ type }) => type != 'text').length;
+
     return {
       questions: processedSubjects.filter(({ type }) => type != 'text'),
       examPaperInstanceId: getDistribute.exam_paper_instance_id,
       subjects: processedSubjects,
-      originalSubjects: getDistribute.subjects, // 保留原始 subjects 用于 submissionsStorage
-      total: getDistribute.subjects.length, // 使用原始 subjects 的长度
+      examDistribute: getDistribute, // 完整的 distribute 对象用于 submissionsStorage
+      total: actualQuestionsCount, // 使用实际题目数量（展开后的）
     };
   }
 
@@ -512,16 +551,12 @@ export default class ExamProc implements Processor {
     );
     console.log('题目类型:', typeNames);
 
-    const isSupportSubject = ({ type }: (typeof subjects)[number]) =>
-      hasResolver(type) || type === 'random'; // random类型本身可能没有解析器，但需要检查其子题目
+    const isSupportSubject = (v: (typeof subjects)[number]) =>
+      hasResolver(v.type) || (v.type === 'random' && v.sub_subjects && v.sub_subjects.every(isSupportSubject));
 
     const test = subjects
       .filter((v) => v.type != 'text')
-      .every((v) =>
-        v.type == 'random'
-          ? v.sub_subjects?.every(isSupportSubject) || true // 如果random没有子题目，则认为支持
-          : isSupportSubject(v),
-      );
+      .every(isSupportSubject);
 
     if (!test) {
       const unsupported = subjects
