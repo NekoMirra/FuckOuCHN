@@ -176,7 +176,7 @@ export default class ExamProc implements Processor {
 
       console.log('提交subjects ids:', uniqueAnswerSubjects.map(s => s.subjectId));
       console.log('totalSubjects:', total, 'subjects.length:', uniqueAnswerSubjects.length);
-      
+
       // 诊断：打印完整的答案信息用于调试
       if (uniqueAnswerSubjects.length !== total) {
         console.warn(`⚠️ 警告：提交的题目数量 (${uniqueAnswerSubjects.length}) 不等于总题目数 (${total})`);
